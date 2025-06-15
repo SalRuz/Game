@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Игровой сайт</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        
+        .menu {
+            margin-top: 100px;
+        }
+        
+        .menu-button {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        
+        .menu-button:hover {
+            background-color: #45a049;
+        }
+        
+        /* Стили для игрового экрана (изначально скрыт) */
+        #game-screen {
+            display: none;
+            position: relative;
+            width: 800px;
+            height: 400px;
+            margin: 20px auto;
+            background-color: #87CEEB; /* Голубой фон */
+            overflow: hidden;
+        }
+        
+        #platform {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 20px;
+            background-color: #4CAF50; /* Зеленая платформа */
+        }
+        
+        #player {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .controls {
+            margin-top: 20px;
+        }
+        
+        .control-button {
+            padding: 10px 20px;
+            margin: 0 5px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="menu" id="menu-screen">
+        <h1>Добро пожаловать!</h1>
+        <a href="https://salruz.github.io/Code/" class="menu-button">Назад</a>
+        <button class="menu-button" id="play-button">Играть</button>
+    </div>
+    
+    <div id="game-screen">
+        <div id="platform"></div>
+        <div id="player">@</div>
+        
+        <div class="controls">
+            <button class="control-button" id="left-btn">Влево</button>
+            <button class="control-button" id="right-btn">Вправо</button>
+            <button class="control-button" id="jump-btn">Прыжок</button>
+        </div>
+    </div>
+    
+    <script>
+        // Переключение между меню и игрой
+        document.getElementById('play-button').addEventListener('click', function() {
+            document.getElementById('menu-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+            initGame();
+        });
+        
+        // Игровая логика
+        function initGame() {
+            const player = document.getElementById('player');
+            const leftBtn = document.getElementById('left-btn');
+            const rightBtn = document.getElementById('right-btn');
+            const jumpBtn = document.getElementById('jump-btn');
+            
+            let playerX = 400;
+            let playerY = 0;
+            let isJumping = false;
+            let jumpHeight = 0;
+            const jumpMax = 100;
+            let gravity = 2;
+            
+            // Позиционируем игрока
+            updatePlayerPosition();
+            
+            // Управление
+            leftBtn.addEventListener('mousedown', moveLeft);
+            leftBtn.addEventListener('mouseup', stopMoving);
+            leftBtn.addEventListener('mouseleave', stopMoving);
+            
+            rightBtn.addEventListener('mousedown', moveRight);
+            rightBtn.addEventListener('mouseup', stopMoving);
+            rightBtn.addEventListener('mouseleave', stopMoving);
+            
+            jumpBtn.addEventListener('click', jump);
+            
+            // Клавиатура
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'ArrowLeft') moveLeft();
+                if (e.key === 'ArrowRight') moveRight();
+                if (e.key === ' ' || e.key === 'ArrowUp') jump();
+            });
+            
+            document.addEventListener('keyup', function(e) {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') stopMoving();
+            });
+            
+            let moveDirection = 0;
+            const moveSpeed = 5;
+            
+            function moveLeft() {
+                moveDirection = -1;
+            }
+            
+            function moveRight() {
+                moveDirection = 1;
+            }
+            
+            function stopMoving() {
+                moveDirection = 0;
+            }
+            
+            function jump() {
+                if (!isJumping) {
+                    isJumping = true;
+                    jumpHeight = jumpMax;
+                }
+            }
+            
+            function updatePlayerPosition() {
+                player.style.left = playerX + 'px';
+                player.style.bottom = (20 + playerY) + 'px';
+            }
+            
+            // Игровой цикл
+            function gameLoop() {
+                // Движение влево/вправо
+                playerX += moveDirection * moveSpeed;
+                
+                // Ограничение движения по краям
+                if (playerX < 0) playerX = 0;
+                if (playerX > 776) playerX = 776; // 800 - 24 (ширина символа)
+                
+                // Прыжок
+                if (isJumping) {
+                    playerY = jumpHeight;
+                    jumpHeight -= gravity;
+                    
+                    if (jumpHeight <= 0) {
+                        jumpHeight = 0;
+                        isJumping = false;
+                    }
+                }
+                
+                updatePlayerPosition();
+                requestAnimationFrame(gameLoop);
+            }
+            
+            gameLoop();
+        }
+    </script>
+</body>
+</html>
