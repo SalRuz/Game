@@ -2,1323 +2,495 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecureEncoder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Платформер</title>
     <style>
-        :root {
-            --primary: #4a6bdf;
-            --primary-dark: #3a56b2;
-            --secondary: #2ecc71;
-            --tertiary: #f39c12;
-            --dark: #2c3e50;
-            --light: #ecf0f1;
-            --danger: #e74c3c;
-            --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
-        }
-        
-        * {
-            box-sizing: border-box;
+        body {
             margin: 0;
             padding: 0;
-        }
-        
-        body {
-            font-family: var(--font-main);
-            line-height: 1.6;
-            background-color: #f5f7fa;
-            color: var(--dark);
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             overflow: hidden;
+            touch-action: none;
+            font-family: Arial, sans-serif;
+            background-color: #333;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        #gameContainer {
             position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
         }
         
-        header {
-            background: var(--primary);
-            color: white;
-            padding: 25px;
-            text-align: center;
-        }
-        
-        h1 {
-            font-size: 2.2rem;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            opacity: 0.9;
-            font-weight: normal;
-        }
-        
-        main {
-            padding: 25px;
-        }
-        
-        .input-group {
-            margin-bottom: 25px;
-            position: relative;
-        }
-        
-        label {
+        #gameCanvas {
+            background-color: #222;
             display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--dark);
         }
         
-        textarea {
-            width: 100%;
-            min-height: 150px;
-            padding: 15px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-family: var(--font-main);
-            font-size: 1rem;
-            resize: vertical;
-            transition: border 0.3s;
-        }
-        
-        textarea:focus {
-            border-color: var(--primary);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(74, 107, 223, 0.2);
-        }
-        
-        .output-container {
-            position: relative;
-            margin-bottom: 25px;
-        }
-        
-        #output {
-            width: 100%;
-            min-height: 150px;
-            padding: 15px;
-            background-color: var(--light);
-            border: 2px dashed #bdc3c7;
-            border-radius: 8px;
-            font-family: var(--font-main);
-            font-size: 1rem;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        
-        .buttons {
-            display: flex;
-            gap: 15px;
-            margin-top: 20px;
-        }
-        
-        button {
-            flex: 1;
-            padding: 14px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        
-        .btn-primary {
-            background-color: var(--primary);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background-color: var(--primary-dark);
-        }
-        
-        .btn-secondary {
-            background-color: var(--secondary);
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            opacity: 0.9;
-        }
-        
-        .btn-tertiary {
-            background-color: var(--tertiary);
-            color: white;
-        }
-        
-        .btn-tertiary:hover {
-            opacity: 0.9;
-        }
-        
-        .mode-toggle {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 20px;
-            position: relative;
-        }
-        
-        .toggle-btn {
-            padding: 10px 20px;
-            border: 2px solid var(--primary);
-            border-radius: 8px;
-            background: white;
-            color: var(--primary);
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .toggle-btn.active {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .notification {
+        #menu {
             position: absolute;
-            top: 15px;
-            right: 15px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
-        }
-        
-        .notification.show {
-            opacity: 1;
-        }
-        
-        footer {
-            text-align: center;
-            padding: 20px;
-            color: #7f8c8d;
-            font-size: 0.9rem;
-        }
-        
-        /* Стили для калькулятора */
-        .calculator {
-            display: none;
-            padding: 20px;
-        }
-        
-        .calculator-display {
+            top: 0;
+            left: 0;
             width: 100%;
-            padding: 15px;
-            font-size: 2rem;
-            text-align: right;
-            margin-bottom: 20px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            background-color: var(--light);
-        }
-        
-        .calculator-buttons {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-        }
-        
-        .calculator-btn {
-            padding: 15px;
-            font-size: 1.2rem;
-            border: none;
-            border-radius: 8px;
-            background-color: var(--light);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .calculator-btn:hover {
-            background-color: #ddd;
-        }
-        
-        .calculator-btn.operator {
-            background-color: var(--primary);
-            color: white;
-        }
-        
-        .calculator-btn.equals {
-            background-color: var(--secondary);
-            color: white;
-            grid-column: span 2;
-        }
-        
-        .calculator-btn.clear {
-            background-color: var(--danger);
-            color: white;
-        }
-        
-        .calculator-btn.back {
-            background-color: var(--tertiary);
-            color: white;
-            grid-column: span 2;
-        }
-        
-        /* Стили для меню */
-        .menu {
-            display: none;
-            padding: 30px;
-            text-align: center;
-            background-image: url('IMG/SalRuz.png');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            min-height: 600px;
-            position: relative;
-            transition: background-image 0.5s ease-in-out;
-        }
-        
-        .menu-btn {
-            display: block;
-            width: 100%;
-            padding: 15px;
-            margin-bottom: 15px;
-            background-color: rgba(74, 107, 223, 0.25);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            position: relative;
-            backdrop-filter: blur(5px);
-        }
-        
-        .menu-btn:hover {
-            background-color: rgba(74, 107, 223, 0.4);
-        }
-        
-        .menu-btn:last-child {
-            background-color: rgba(46, 204, 113, 0.25);
-        }
-        
-        .menu-btn:last-child:hover {
-            background-color: rgba(46, 204, 113, 0.4);
-        }
-        
-        /* Стили для индикаторов музыки */
-        .music-playing::after {
-            content: '‖';
-            color: #2ecc71;
-            font-weight: bold;
-            margin-left: 10px;
-            font-size: 1.2em;
-        }
-        
-        .music-paused::after {
-            content: '●';
-            color: #e74c3c;
-            margin-left: 10px;
-            font-size: 1.2em;
-        }
-        
-        /* Стили для счетчика посещений */
-        .visit-counter {
-            position: absolute;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            width: max-content;
-        }
-        
-        /* Стили для приветствия */
-        .welcome-message {
-            position: absolute;
-            bottom: 150px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            width: max-content;
-            max-width: 80%;
-            text-align: center;
-        }
-        
-        /* Стили для чата */
-        .chat {
-            display: none;
-            padding: 30px;
-            text-align: center;
-            background-image: url('IMG/SalRuz.png');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            min-height: 600px;
-            position: relative;
-        }
-        
-        .chat-container {
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
             display: flex;
             flex-direction: column;
-            height: 500px;
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: rgba(255, 255, 255, 0.8);
-            border-radius: 8px;
-            overflow: hidden;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
         }
         
-        .chat-messages {
-            flex: 1;
-            padding: 15px;
-            overflow-y: auto;
-        }
-        
-        .message {
-            margin-bottom: 10px;
-            padding: 8px 12px;
-            border-radius: 8px;
-            background-color: #f1f1f1;
-            text-align: left;
-            word-break: break-word;
-        }
-        
-        .message-sender {
-            font-weight: bold;
-            color: var(--primary);
-        }
-        
-        .chat-input-container {
-            display: flex;
-            padding: 10px;
-            background-color: #f5f5f5;
-            border-top: 1px solid #ddd;
-        }
-        
-        .chat-input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-right: 10px;
-        }
-        
-        .chat-send-btn {
-            padding: 10px 15px;
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .chat-back-btn {
-            display: block;
-            width: 150px;
-            margin: 20px auto 0;
-            padding: 10px;
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-        }
-        
-        .nickname-input-group {
-            margin-bottom: 20px;
-            position: relative;
-            width: 80%;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        
-        .nickname-input {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-family: var(--font-main);
-            font-size: 1rem;
-        }
-        
-        .nickname-ok-btn {
+        #scoreDisplay {
             position: absolute;
-            right: 5px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: var(--primary);
+            top: 10px;
+            left: 10px;
             color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 5px 10px;
-            cursor: pointer;
+            font-size: 24px;
+            z-index: 5;
         }
         
-        @media (max-width: 768px) {
-            body {
-                padding: 10px;
-            }
-            
-            h1 {
-                font-size: 1.8rem;
-            }
-            
-            .buttons {
-                flex-direction: column;
-            }
-            
-            .menu, .chat {
-                min-height: 500px;
-                padding: 20px;
-            }
-            
-            .nickname-input-group {
-                width: 95%;
-            }
-            
-            .chat-container {
-                height: 400px;
-            }
-            
-            .visit-counter {
-                bottom: 80px;
-            }
-            
-            .welcome-message {
-                bottom: 120px;
-            }
+        .button {
+            width: 150px;
+            height: 150px;
+            margin: 20px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .button:active {
+            transform: scale(0.95);
+        }
+        
+        #backButton {
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAAB+UlEQVR4nO2WP0gCQRjGn5qCQYgGhyAIQhAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRA=');
+        }
+        
+        #playButton {
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAAB+UlEQVR4nO2WP0gCURjGn5qCQYgGhyAIQhAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRAEQRA=');
+        }
+        
+        #mobileControls {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 5;
+        }
+        
+        .controlButton {
+            width: 80px;
+            height: 80px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: white;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1 id="appTitle">SalRuzO code</h1>
-            <p class="subtitle" id="appSubtitle">Переводчик текста в специальный шифр и обратно</p>
-        </header>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="scoreDisplay">Счёт: 0</div>
         
-        <main id="encoderApp">
-            <div class="mode-toggle">
-                <button class="toggle-btn active" id="toggleModeBtn">Режим: Шифрование</button>
-            </div>
-            
-            <div class="input-group">
-                <label for="inputText" id="inputLabel">Исходный текст:</label>
-                <textarea id="inputText" placeholder="Введите текст для шифрования..." autofocus></textarea>
-            </div>
-            
-            <div class="output-container">
-                <label for="output" id="outputLabel">Зашифрованный текст:</label>
-                <div id="output" contenteditable="true" placeholder="Здесь появится результат..."></div>
-                <div class="notification" id="notification">Скопировано!</div>
-            </div>
-            
-            <div class="buttons">
-                <button class="btn-secondary" id="copyBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    Копировать
-                </button>
-                <button class="btn-primary" id="clearBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                    Очистить
-                </button>
-            </div>
-        </main>
+        <div id="menu">
+            <div id="playButton" class="button"></div>
+            <div id="backButton" class="button"></div>
+        </div>
         
-        <main class="calculator" id="calculatorApp">
-            <input type="text" class="calculator-display" id="calculatorDisplay" readonly>
-            <div class="calculator-buttons">
-                <button class="calculator-btn clear" id="clearCalculatorBtn">C</button>
-                <button class="calculator-btn" id="backspaceBtn">⌫</button>
-                <button class="calculator-btn operator" id="divideBtn">/</button>
-                <button class="calculator-btn operator" id="multiplyBtn">×</button>
-                
-                <button class="calculator-btn" id="sevenBtn">7</button>
-                <button class="calculator-btn" id="eightBtn">8</button>
-                <button class="calculator-btn" id="nineBtn">9</button>
-                <button class="calculator-btn operator" id="subtractBtn">-</button>
-                
-                <button class="calculator-btn" id="fourBtn">4</button>
-                <button class="calculator-btn" id="fiveBtn">5</button>
-                <button class="calculator-btn" id="sixBtn">6</button>
-                <button class="calculator-btn operator" id="addBtn">+</button>
-                
-                <button class="calculator-btn" id="oneBtn">1</button>
-                <button class="calculator-btn" id="twoBtn">2</button>
-                <button class="calculator-btn" id="threeBtn">3</button>
-                <button class="calculator-btn operator" id="equalsBtn">=</button>
-                
-                <button class="calculator-btn" id="zeroBtn">0</button>
-                <button class="calculator-btn" id="decimalBtn">.</button>
-                <button class="calculator-btn" id="plusMinusBtn">±</button>
-                <button class="calculator-btn back" id="calculatorBackBtn">Назад</button>
-            </div>
-        </main>
-        
-        <main class="menu" id="menuApp">
-            <button class="menu-btn" id="menuBtn1">Смена Фона</button>
-            <button class="menu-btn" id="menuBtn2">Музончик</button>
-            <button class="menu-btn" id="menuBtn3">Чат</button>
-            <button class="menu-btn" id="menuBtn4">Калькулятор</button>
-            <button class="menu-btn" id="menuBtn5">Шифратор</button>
-            <button class="menu-btn" id="menuBtn6">Игра</button>
-            <div class="welcome-message" id="welcomeMessage"></div>
-            <div class="visit-counter" id="visitCounter">Посещений: 0</div>
-        </main>
-        
-        <main class="chat" id="chatApp">
-            <div id="nicknameSetup">
-                <div class="nickname-input-group">
-                    <input type="text" class="nickname-input" id="nicknameInput" placeholder="Придумайте Никнейм">
-                    <button class="nickname-ok-btn" id="nicknameOkBtn">Ок</button>
-                </div>
-            </div>
-            
-            <div id="chatInterface" style="display: none;">
-                <div class="chat-container">
-                    <div class="chat-messages" id="chatMessages"></div>
-                    <div class="chat-input-container">
-                        <input type="text" class="chat-input" id="messageInput" placeholder="Введите сообщение...">
-                        <button class="chat-send-btn" id="sendMessageBtn">Отправить</button>
-                    </div>
-                </div>
-                <button class="chat-back-btn" id="chatBackBtn">Вернуться в меню</button>
-            </div>
-        </main>
-        
-        <footer>
-            <p>© 2025 SalRuzO | У меня нет прав</p>
-        </footer>
+        <div id="mobileControls" style="display: none;">
+            <div class="controlButton" id="leftButton">←</div>
+            <div class="controlButton" id="rightButton">→</div>
+            <div class="controlButton" id="upButton">↑</div>
+            <div class="controlButton" id="downButton">↓</div>
+        </div>
     </div>
 
-    <!-- Аудио элемент для музыки -->
-    <audio id="backgroundMusic" loop>
-        <source src="Music/music.mp3" type="audio/mpeg">
-    </audio>
-
     <script>
-        // Шифр замены (исправленный)
-        const cipher = {
-            'А': '*', 'Б': '6', 'В': '8', 'Г': '[', 'Д': '9', 'Е': '<', 'Ё': ':',
-            'Ж': '§', 'З': '}', 'И': '!', 'Й': '~', 'К': '{', 'Л': '/', 'М': '^',
-            'Н': '=', 'О': '∆', 'П': '#', 'Р': '?', 'С': '(', 'Т': '7', 'У': '√',
-            'Ф': '&', 'Х': '+', 'Ц': '¢', 'Ч': '÷', 'Ы': '|', 'Ь': '¿', 'Ъ': '-¿',
-            'Ш': '¶', 'Щ': 'π', 'Э': ')', 'Ю': '%', 'Я': '@',
-            'а': '*', 'б': '6', 'в': '8', 'г': '[', 'д': '9', 'е': '<', 'ё': ':',
-            'ж': '§', 'з': '}', 'и': '!', 'й': '~', 'к': '{', 'л': '/', 'м': '^',
-            'н': '=', 'о': '∆', 'п': '#', 'р': '?', 'с': '(', 'т': '7', 'у': '√',
-            'ф': '&', 'х': '+', 'ц': '¢', 'ч': '÷', 'ы': '|', 'ь': '¿', 'ъ': '-¿',
-            'ш': '¶', 'щ': 'π', 'э': ')', 'ю': '%', 'я': '@', ' ': ' '
-        };
-
-        // Обратный шифр для дешифровки (все буквы маленькие)
-        const reverseCipher = {
-            '*': 'а', '6': 'б', '8': 'в', '[': 'г', '9': 'д', '<': 'е', ':': 'ё',
-            '§': 'ж', '}': 'з', '!': 'и', '~': 'й', '{': 'к', '/': 'л', '^': 'м',
-            '=': 'н', '∆': 'о', '#': 'п', '?': 'р', '(': 'с', '7': 'т', '√': 'у',
-            '&': 'ф', '+': 'х', '¢': 'ц', '÷': 'ч', '|': 'ы', '¿': 'ь', '-¿': 'ъ',
-            '¶': 'ш', 'π': 'щ', ')': 'э', '%': 'ю', '@': 'я', ' ': ' '
-        };
-
-        // Плейлист с музыкой
-        const musicPlaylist = [
-            "https://mp3.vkmusic.me/ru/pc/353430025/200/af6e3e5f1d/5e5b4b1d9d6d3.mp3",
-            "https://mp3.vkmusic.me/ru/pc/353430025/200/af6e3e5f1d/5e5b4b1d9d6d3.mp3",
-            "https://mp3.vkmusic.me/ru/pc/353430025/200/af6e3e5f1d/5e5b4b1d9d6d3.mp3",
-            // Добавьте больше треков из плейлиста
-        ];
-
-        // DOM элементы
-        const inputText = document.getElementById('inputText');
-        const output = document.getElementById('output');
-        const copyBtn = document.getElementById('copyBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const notification = document.getElementById('notification');
-        const toggleModeBtn = document.getElementById('toggleModeBtn');
-        const inputLabel = document.getElementById('inputLabel');
-        const outputLabel = document.getElementById('outputLabel');
-        const encoderApp = document.getElementById('encoderApp');
-        const calculatorApp = document.getElementById('calculatorApp');
-        const menuApp = document.getElementById('menuApp');
-        const chatApp = document.getElementById('chatApp');
-        const appTitle = document.getElementById('appTitle');
-        const appSubtitle = document.getElementById('appSubtitle');
-        const visitCounter = document.getElementById('visitCounter');
-        const welcomeMessage = document.getElementById('welcomeMessage');
-        const nicknameInput = document.getElementById('nicknameInput');
-        const nicknameOkBtn = document.getElementById('nicknameOkBtn');
-        const chatBackBtn = document.getElementById('chatBackBtn');
-        const calculatorBackBtn = document.getElementById('calculatorBackBtn');
-        const chatMessages = document.getElementById('chatMessages');
-        const messageInput = document.getElementById('messageInput');
-        const sendMessageBtn = document.getElementById('sendMessageBtn');
-        const nicknameSetup = document.getElementById('nicknameSetup');
-        const chatInterface = document.getElementById('chatInterface');
+        // Элементы DOM
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const menu = document.getElementById('menu');
+        const playButton = document.getElementById('playButton');
+        const backButton = document.getElementById('backButton');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const mobileControls = document.getElementById('mobileControls');
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
+        const upButton = document.getElementById('upButton');
+        const downButton = document.getElementById('downButton');
         
-        // Элементы калькулятора
-        const calculatorDisplay = document.getElementById('calculatorDisplay');
-        const clearCalculatorBtn = document.getElementById('clearCalculatorBtn');
-        const backspaceBtn = document.getElementById('backspaceBtn');
-        const numberBtns = document.querySelectorAll('.calculator-buttons button:not(.operator):not(.clear):not(#equalsBtn):not(#backspaceBtn):not(#calculatorBackBtn)');
-        const operatorBtns = document.querySelectorAll('.operator:not(#equalsBtn)');
-        const equalsBtn = document.getElementById('equalsBtn');
-        const decimalBtn = document.getElementById('decimalBtn');
-        const plusMinusBtn = document.getElementById('plusMinusBtn');
-
-        // Элементы меню
-        const menuBtn1 = document.getElementById('menuBtn1');
-        const menuBtn2 = document.getElementById('menuBtn2');
-        const menuBtn3 = document.getElementById('menuBtn3');
-        const menuBtn4 = document.getElementById('menuBtn4');
-        const menuBtn5 = document.getElementById('menuBtn5');
-        const menuBtn6 = document.getElementById('menuBtn6');
-
-        // Аудио элемент
-        const backgroundMusic = document.getElementById('backgroundMusic');
-
-        let currentMode = 'encode';
-        let currentApp = 'encoder';
-        let firstOperand = null;
-        let operator = null;
-        let waitingForSecondOperand = false;
-        let lastBackgroundIndex = 0;
-        let isMusicPlaying = false;
-
-        // Доступные фоны (включая SalRuz.png)
-        const backgrounds = [
-            'IMG/SalRuz.png',
-            'IMG/1.png',
-            'IMG/2.png',
-            'IMG/3.png',
-            'IMG/4.png',
-            'IMG/5.png',
-            'IMG/6.png',
-            'IMG/7.png'
-        ];
-
-        // Инициализация localStorage
-        function initLocalStorage() {
-            // Загрузка данных из localStorage
-            if (localStorage.getItem('encoderInput')) {
-                inputText.value = localStorage.getItem('encoderInput');
-                transformText();
-            }
+        // Размеры canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Игровые переменные
+        let score = 0;
+        let gameRunning = false;
+        let keys = {};
+        let touchControls = {
+            left: false,
+            right: false,
+            up: false,
+            down: false
+        };
+        
+        // Игровые объекты
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            width: 40,
+            height: 40,
+            speed: 5,
+            color: '#3498db',
+            frame: 0,
+            animationTimer: 0,
+            direction: 'down'
+        };
+        
+        const platforms = [];
+        const coins = [];
+        
+        // Создание платформ
+        function createPlatforms() {
+            platforms.length = 0;
             
-            if (localStorage.getItem('calculatorDisplay')) {
-                calculatorDisplay.value = localStorage.getItem('calculatorDisplay');
-            }
+            // Основная большая платформа
+            platforms.push({
+                x: 50,
+                y: canvas.height - 150,
+                width: canvas.width - 100,
+                height: 100,
+                color: '#2ecc71',
+                darkColor: '#27ae60'
+            });
             
-            if (localStorage.getItem('calculatorState')) {
-                const state = JSON.parse(localStorage.getItem('calculatorState'));
-                firstOperand = state.firstOperand;
-                operator = state.operator;
-                waitingForSecondOperand = state.waitingForSecondOperand;
-            }
-            
-            // Счетчик посещений
-            let visits = localStorage.getItem('visitCount') || 0;
-            visits = parseInt(visits) + 1;
-            localStorage.setItem('visitCount', visits);
-            visitCounter.textContent = `Посещений: ${visits}`;
-            
-            // Никнейм пользователя
-            if (localStorage.getItem('userNickname')) {
-                welcomeMessage.textContent = `Добро пожаловать, ${localStorage.getItem('userNickname')}`;
+            // Несколько маленьких платформ
+            for (let i = 0; i < 5; i++) {
+                const width = 80 + Math.random() * 70;
+                const height = 20;
+                const x = Math.random() * (canvas.width - width - 100) + 50;
+                const y = canvas.height - 300 - Math.random() * 200;
                 
-                // Если никнейм есть, показываем интерфейс чата
-                nicknameSetup.style.display = 'none';
-                chatInterface.style.display = 'block';
-                
-                // Загружаем сообщения
-                loadMessages();
+                platforms.push({
+                    x: x,
+                    y: y,
+                    width: width,
+                    height: height,
+                    color: '#2ecc71',
+                    darkColor: '#27ae60'
+                });
             }
+        }
+        
+        // Создание монет
+        function createCoins() {
+            coins.length = 0;
             
-            // Загружаем текущий фон
-            if (localStorage.getItem('currentBackground')) {
-                menuApp.style.backgroundImage = `url('${localStorage.getItem('currentBackground')}')`;
+            for (let i = 0; i < 10; i++) {
+                spawnCoin();
             }
         }
-
-        // Сохранение состояния калькулятора
-        function saveCalculatorState() {
-            const state = {
-                firstOperand,
-                operator,
-                waitingForSecondOperand
-            };
-            localStorage.setItem('calculatorState', JSON.stringify(state));
-            localStorage.setItem('calculatorDisplay', calculatorDisplay.value);
-        }
-
-        // Очистка текста от лишних символов (исправленная)
-        function cleanText(text, mode) {
-            if (mode === 'encode') {
-                return text.replace(/[^А-Яа-яЁё\s]/g, '');
-            } else {
-                // Для дешифровки разрешаем только символы из шифра
-                const specialChars = ['*', '.', '+', '?', '|', '(', ')', '[', ']', '{', '}', '^', '$', '\\'];
-                const allowedChars = Object.keys(reverseCipher).map(c => {
-                    if (specialChars.includes(c)) {
-                        return `\\${c}`;
-                    }
-                    return c;
-                }).join('');
-                
-                const regex = new RegExp(`[^${allowedChars}\\s]`, 'g');
-                return text.replace(regex, '');
-            }
-        }
-
-        // Перевод текста в шифр
-        function encodeText(text) {
-            const cleaned = cleanText(text, 'encode');
-            return cleaned.split('').map(char => cipher[char] || char).join('');
-        }
-
-        // Перевод шифра в текст (все буквы маленькие)
-        function decodeText(text) {
-            const cleaned = cleanText(text, 'decode');
-            let result = '';
-            let i = 0;
+        
+        function spawnCoin() {
+            // Находим случайную платформу (кроме основной)
+            if (platforms.length < 2) return;
             
-            while (i < cleaned.length) {
-                // Проверяем специальные двухсимвольные комбинации
-                if (cleaned[i] === '-' && cleaned[i+1] === '¿') {
-                    result += reverseCipher['-¿'] || '-¿';
-                    i += 2;
-                } else {
-                    result += reverseCipher[cleaned[i]] || cleaned[i];
-                    i += 1;
+            const platform = platforms[Math.floor(Math.random() * (platforms.length - 1)) + 1];
+            const x = platform.x + Math.random() * (platform.width - 20);
+            const y = platform.y - 30;
+            
+            coins.push({
+                x: x,
+                y: y,
+                width: 20,
+                height: 20,
+                color: '#f39c12',
+                collected: false
+            });
+        }
+        
+        // Обработка столкновений
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+        
+        // Проверка, стоит ли игрок на платформе
+        function isOnPlatform() {
+            const playerBottom = player.y + player.height;
+            const playerCenter = player.x + player.width / 2;
+            
+            for (const platform of platforms) {
+                const platformTop = platform.y;
+                const platformLeft = platform.x;
+                const platformRight = platform.x + platform.width;
+                
+                if (playerBottom <= platformTop + 5 && 
+                    playerBottom >= platformTop &&
+                    playerCenter >= platformLeft && 
+                    playerCenter <= platformRight) {
+                    return true;
                 }
             }
             
-            return result;
-        }
-
-        // Показ уведомления
-        function showNotification(message) {
-            notification.textContent = message;
-            notification.classList.add('show');
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 2000);
-        }
-
-        // Переключение режима
-        function toggleMode() {
-            // Сначала меняем текст в полях местами
-            const temp = inputText.value;
-            inputText.value = output.textContent;
-            output.textContent = temp;
-            
-            // Затем меняем режим
-            currentMode = currentMode === 'encode' ? 'decode' : 'encode';
-            
-            if (currentMode === 'encode') {
-                toggleModeBtn.textContent = 'Режим: Шифрование';
-                toggleModeBtn.classList.add('active');
-                inputLabel.textContent = 'Исходный текст:';
-                outputLabel.textContent = 'Зашифрованный текст:';
-                inputText.placeholder = 'Введите текст для шифрования...';
-            } else {
-                toggleModeBtn.textContent = 'Режим: Дешифрование';
-                toggleModeBtn.classList.add('active');
-                inputLabel.textContent = 'Зашифрованный текст:';
-                outputLabel.textContent = 'Расшифрованный текст:';
-                inputText.placeholder = 'Введите шифр для расшифровки...';
-            }
-            
-            // Сохраняем изменения
-            localStorage.setItem('encoderInput', inputText.value);
-        }
-
-        // Проверка на ключевые слова
-        function checkKeywords(text) {
-            const calculatorKeyword = "калькулятор";
-            const salruzKeyword = "salruz";
-            const menuKeyword = "меню";
-            const thanksKeyword = "спасибо";
-            const gameKeyword = "игра";
-            
-            // Проверка на имена для первой ссылки
-            const names1 = ["артур", "тагир", "котики"];
-            if (names1.some(name => text.trim().toLowerCase() === name)) {
-                window.open("https://youtu.be/L83yZwAJv7M?si=N-6GuyyK2d7TDJLL", "_blank");
-                return true;
-            }
-            
-            // Проверка на имена для второй ссылки
-            const names2 = ["саня", "александр", "саша", "санек", "пес"];
-            if (names2.some(name => text.trim().toLowerCase() === name)) {
-                window.open("https://youtu.be/D01SLZu009M?si=ZTNlYZLLt7Bmc8qD", "_blank");
-                return true;
-            }
-            
-            // Проверка на слова для третьей ссылки
-            const words3 = ["террария", "джо джо"];
-            if (words3.some(word => text.trim().toLowerCase() === word)) {
-                window.open("https://youtu.be/UhhfcKk00u0?si=UYGR8w1MUI_-wc0q", "_blank");
-                return true;
-            }
-            
-            if (text.trim().toLowerCase() === calculatorKeyword.toLowerCase()) {
-                switchApp('calculator');
-                return true;
-            }
-            else if (text.trim().toLowerCase() === salruzKeyword.toLowerCase()) {
-                window.location.href = "https://t.me/SalRuzO";
-                return true;
-            }
-            else if (text.trim().toLowerCase() === menuKeyword.toLowerCase()) {
-                switchApp('menu');
-                return true;
-            }
-            else if (text.trim().toLowerCase() === thanksKeyword.toLowerCase()) {
-                window.open("https://parad1st.github.io/Screamer/", "_blank");
-                return true;
-            }
-            else if (text.trim().toLowerCase() === gameKeyword.toLowerCase()) {
-                window.open("https://salruz.github.io/Game/", "_blank");
-                return true;
-            }
             return false;
         }
-
-        // Преобразование текста
-        function transformText() {
-            const text = inputText.value;
-            if (text.trim() === '') {
-                output.textContent = '';
-                return;
+        
+        // Обновление игрового состояния
+        function update() {
+            if (!gameRunning) return;
+            
+            // Движение игрока
+            let moving = false;
+            
+            if (keys.ArrowLeft || touchControls.left) {
+                player.x -= player.speed;
+                player.direction = 'left';
+                moving = true;
+            }
+            if (keys.ArrowRight || touchControls.right) {
+                player.x += player.speed;
+                player.direction = 'right';
+                moving = true;
+            }
+            if ((keys.ArrowUp || touchControls.up) && isOnPlatform()) {
+                player.y -= player.speed * 3; // Прыжок
+                player.direction = 'up';
+                moving = true;
+            }
+            if (keys.ArrowDown || touchControls.down) {
+                player.y += player.speed;
+                player.direction = 'down';
+                moving = true;
             }
             
-            // Проверка на ключевые слова
-            if (checkKeywords(text)) {
-                inputText.value = '';
-                output.textContent = '';
-                return;
-            }
-            
-            output.textContent = currentMode === 'encode' ? encodeText(text) : decodeText(text);
-            localStorage.setItem('encoderInput', inputText.value);
-        }
-
-        // Очистка полей (без фокуса на поле ввода)
-        function clearFields() {
-            inputText.value = '';
-            output.textContent = '';
-            localStorage.removeItem('encoderInput');
-        }
-
-        // Переключение между приложениями
-        function switchApp(app = null) {
-            if (app) {
-                currentApp = app;
+            // Анимация игрока
+            if (moving) {
+                player.animationTimer++;
+                if (player.animationTimer >= 10) {
+                    player.frame = (player.frame + 1) % 4;
+                    player.animationTimer = 0;
+                }
             } else {
-                currentApp = 'encoder';
+                player.frame = 0;
+                player.animationTimer = 0;
             }
             
-            // Скрыть все приложения
-            encoderApp.style.display = 'none';
-            calculatorApp.style.display = 'none';
-            menuApp.style.display = 'none';
-            chatApp.style.display = 'none';
-            
-            // Показать нужное приложение
-            switch (currentApp) {
-                case 'calculator':
-                    calculatorApp.style.display = 'block';
-                    appTitle.textContent = 'Калькулятор';
-                    appSubtitle.textContent = 'Простой и удобный калькулятор';
-                    break;
-                case 'menu':
-                    menuApp.style.display = 'block';
-                    appTitle.textContent = 'Меню';
-                    appSubtitle.textContent = 'Выберите действие';
-                    break;
-                case 'chat':
-                    chatApp.style.display = 'block';
-                    appTitle.textContent = 'Чат';
-                    if (localStorage.getItem('userNickname')) {
-                        appSubtitle.textContent = 'Чат с друзьями';
-                        nicknameSetup.style.display = 'none';
-                        chatInterface.style.display = 'block';
-                    } else {
-                        appSubtitle.textContent = 'Установите ваш никнейм';
-                        nicknameSetup.style.display = 'block';
-                        chatInterface.style.display = 'none';
-                    }
-                    break;
-                default:
-                    encoderApp.style.display = 'block';
-                    appTitle.textContent = 'SalRuzO code';
-                    appSubtitle.textContent = 'Переводчик текста в специальный шифр и обратно';
-                    currentApp = 'encoder';
+            // Гравитация
+            if (!isOnPlatform()) {
+                player.y += 3;
             }
-        }
-
-        // Смена фона меню
-        function changeBackground() {
-            let randomIndex;
-            do {
-                randomIndex = Math.floor(Math.random() * backgrounds.length);
-            } while (randomIndex === lastBackgroundIndex && backgrounds.length > 1);
             
-            lastBackgroundIndex = randomIndex;
-            menuApp.style.backgroundImage = `url('${backgrounds[randomIndex]}')`;
-            localStorage.setItem('currentBackground', backgrounds[randomIndex]);
-        }
-
-        // Управление музыкой
-        function toggleMusic() {
-            // Выбираем случайный трек из плейлиста
-            const randomTrack = musicPlaylist[Math.floor(Math.random() * musicPlaylist.length)];
-            backgroundMusic.src = randomTrack;
-            
-            if (backgroundMusic.paused) {
-                backgroundMusic.play()
-                    .then(() => {
-                        isMusicPlaying = true;
-                        menuBtn2.classList.add('music-playing');
-                        menuBtn2.classList.remove('music-paused');
-                    })
-                    .catch(error => {
-                        console.error('Ошибка воспроизведения музыки:', error);
-                        showNotification('Ошибка воспроизведения музыки');
-                    });
-            } else {
-                backgroundMusic.pause();
-                isMusicPlaying = false;
-                menuBtn2.classList.remove('music-playing');
-                menuBtn2.classList.add('music-paused');
+            // Границы canvas
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+            if (player.y < 0) player.y = 0;
+            if (player.y + player.height > canvas.height) {
+                player.y = canvas.height - player.height;
+                // Игрок упал вниз - респавн
+                player.x = canvas.width / 2;
+                player.y = canvas.height / 2;
             }
-        }
-
-        // Проверка на число 26 в калькуляторе
-        function checkFor26() {
-            if (calculatorDisplay.value === '26') {
-                backgroundMusic.play()
-                    .then(() => {
-                        isMusicPlaying = true;
-                        if (currentApp === 'menu') {
-                            menuBtn2.classList.add('music-playing');
-                            menuBtn2.classList.remove('music-paused');
+            
+            // Сбор монет
+            for (const coin of coins) {
+                if (!coin.collected && checkCollision(player, coin)) {
+                    coin.collected = true;
+                    score++;
+                    scoreDisplay.textContent = `Счёт: ${score}`;
+                    
+                    // Спавн новой монеты через секунду
+                    setTimeout(() => {
+                        const index = coins.indexOf(coin);
+                        if (index !== -1) {
+                            coins.splice(index, 1);
+                            spawnCoin();
                         }
-                    })
-                    .catch(error => {
-                        console.error('Ошибка воспроизведения музыки:', error);
-                    });
-            }
-        }
-
-        // Сохранение никнейма
-        function saveNickname() {
-            const nickname = nicknameInput.value.trim();
-            if (!nickname) {
-                showNotification('Введите никнейм');
-                return;
-            }
-            
-            localStorage.setItem('userNickname', nickname);
-            welcomeMessage.textContent = `Добро пожаловать, ${nickname}`;
-            
-            // Переключаем на интерфейс чата
-            nicknameSetup.style.display = 'none';
-            chatInterface.style.display = 'block';
-            appSubtitle.textContent = 'Чат с друзьями';
-            
-            // Загружаем сообщения
-            loadMessages();
-        }
-
-        // Загрузка сообщений
-        function loadMessages() {
-            const messages = JSON.parse(localStorage.getItem('chatMessages') || '[]');
-            chatMessages.innerHTML = '';
-            
-            messages.forEach(msg => {
-                const messageElement = document.createElement('div');
-                messageElement.className = 'message';
-                messageElement.innerHTML = `<span class="message-sender">${msg.sender}:</span> ${msg.text}`;
-                chatMessages.appendChild(messageElement);
-            });
-            
-            // Прокручиваем вниз
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        // Отправка сообщения
-        function sendMessage() {
-            const messageText = messageInput.value.trim();
-            if (!messageText) return;
-            
-            const nickname = localStorage.getItem('userNickname') || 'Аноним';
-            
-            // Получаем текущие сообщения
-            const messages = JSON.parse(localStorage.getItem('chatMessages') || '[]');
-            
-            // Добавляем новое сообщение
-            messages.push({
-                sender: nickname,
-                text: messageText,
-                timestamp: new Date().toISOString()
-            });
-            
-            // Сохраняем в localStorage
-            localStorage.setItem('chatMessages', JSON.stringify(messages));
-            
-            // Обновляем отображение
-            loadMessages();
-            
-            // Очищаем поле ввода
-            messageInput.value = '';
-        }
-
-        // Функции калькулятора
-        function inputDigit(digit) {
-            if (waitingForSecondOperand) {
-                calculatorDisplay.value = digit;
-                waitingForSecondOperand = false;
-            } else {
-                calculatorDisplay.value = calculatorDisplay.value === '0' ? digit : calculatorDisplay.value + digit;
-            }
-            saveCalculatorState();
-            checkFor26();
-        }
-
-        function inputDecimal() {
-            if (waitingForSecondOperand) {
-                calculatorDisplay.value = '0.';
-                waitingForSecondOperand = false;
-                return;
-            }
-            
-            if (!calculatorDisplay.value.includes('.')) {
-                calculatorDisplay.value += '.';
-            }
-            saveCalculatorState();
-        }
-
-        function handleOperator(nextOperator) {
-            const inputValue = parseFloat(calculatorDisplay.value);
-            
-            if (firstOperand === null) {
-                firstOperand = inputValue;
-            } else if (operator) {
-                const result = calculate(firstOperand, inputValue, operator);
-                calculatorDisplay.value = String(result);
-                firstOperand = result;
-            }
-            
-            waitingForSecondOperand = true;
-            operator = nextOperator;
-            saveCalculatorState();
-        }
-
-        function calculate(firstOperand, secondOperand, operator) {
-            let result;
-            switch (operator) {
-                case '+':
-                    result = firstOperand + secondOperand;
-                    break;
-                case '-':
-                    result = firstOperand - secondOperand;
-                    break;
-                case '×':
-                    result = firstOperand * secondOperand;
-                    break;
-                case '/':
-                    result = firstOperand / secondOperand;
-                    break;
-                default:
-                    result = secondOperand;
-            }
-            
-            saveCalculatorState();
-            checkFor26();
-            return result;
-        }
-
-        function resetCalculator() {
-            calculatorDisplay.value = '0';
-            firstOperand = null;
-            operator = null;
-            waitingForSecondOperand = false;
-            saveCalculatorState();
-        }
-
-        function backspace() {
-            if (calculatorDisplay.value.length === 1 || 
-                (calculatorDisplay.value.length === 2 && calculatorDisplay.value.startsWith('-'))) {
-                calculatorDisplay.value = '0';
-            } else {
-                calculatorDisplay.value = calculatorDisplay.value.slice(0, -1);
-            }
-            saveCalculatorState();
-            checkFor26();
-        }
-
-        function toggleSign() {
-            calculatorDisplay.value = calculatorDisplay.value.startsWith('-') ? 
-                calculatorDisplay.value.slice(1) : 
-                '-' + calculatorDisplay.value;
-            saveCalculatorState();
-        }
-
-        // Обработчики событий для переводчика
-        toggleModeBtn.addEventListener('click', toggleMode);
-        
-        copyBtn.addEventListener('click', async () => {
-            if (!output.textContent.trim()) {
-                showNotification('Нет текста для копирования');
-                return;
-            }
-            
-            try {
-                await navigator.clipboard.writeText(output.textContent);
-                showNotification('Скопировано!');
-            } catch (err) {
-                showNotification('Ошибка копирования');
-                console.error('Ошибка копирования:', err);
-            }
-        });
-
-        clearBtn.addEventListener('click', clearFields);
-
-        // Обработчики для меню
-        menuBtn1.addEventListener('click', changeBackground);
-        menuBtn2.addEventListener('click', toggleMusic);
-        menuBtn3.addEventListener('click', () => {
-            switchApp('chat');
-        });
-        menuBtn4.addEventListener('click', () => {
-            switchApp('calculator');
-        });
-        menuBtn5.addEventListener('click', () => {
-            switchApp('encoder');
-        });
-        menuBtn6.addEventListener('click', () => {
-            window.open("https://salruz.github.io/Game/", "_blank");
-        });
-
-        // Обработчики для чата
-        nicknameOkBtn.addEventListener('click', saveNickname);
-        chatBackBtn.addEventListener('click', () => {
-            switchApp('menu');
-        });
-        
-        sendMessageBtn.addEventListener('click', sendMessage);
-        
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
-        });
-
-        // Обработчик для кнопки назад в калькуляторе
-        calculatorBackBtn.addEventListener('click', () => {
-            switchApp('menu');
-        });
-
-        // Обработчики событий музыки
-        backgroundMusic.addEventListener('play', () => {
-            if (currentApp === 'menu') {
-                menuBtn2.classList.add('music-playing');
-                menuBtn2.classList.remove('music-paused');
-            }
-        });
-
-        backgroundMusic.addEventListener('pause', () => {
-            if (!backgroundMusic.ended) {
-                if (currentApp === 'menu') {
-                    menuBtn2.classList.remove('music-playing');
-                    menuBtn2.classList.add('music-paused');
-                }
-            } else {
-                if (currentApp === 'menu') {
-                    menuBtn2.classList.remove('music-playing', 'music-paused');
+                    }, 1000);
                 }
             }
-        });
-
-        backgroundMusic.addEventListener('ended', () => {
-            if (currentApp === 'menu') {
-                menuBtn2.classList.remove('music-playing', 'music-paused');
-            }
-        });
-
-        // Автоматическое обновление при вводе
-        inputText.addEventListener('input', function() {
-            const text = this.value;
+        }
+        
+        // Отрисовка игры
+        function draw() {
+            // Очистка canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Проверяем на ключевые слова
-            if (checkKeywords(text)) {
-                this.value = '';
-                output.textContent = '';
-                return;
+            if (!gameRunning) return;
+            
+            // Отрисовка платформ
+            for (const platform of platforms) {
+                // Основной цвет платформы
+                ctx.fillStyle = platform.color;
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+                
+                // Темные вкрапления
+                ctx.fillStyle = platform.darkColor;
+                for (let i = 0; i < 10; i++) {
+                    const x = platform.x + Math.random() * platform.width;
+                    const y = platform.y + Math.random() * platform.height;
+                    const size = 5 + Math.random() * 10;
+                    ctx.fillRect(x, y, size, size);
+                }
             }
             
-            // Обычное преобразование текста
-            transformText();
-        });
-
-        // Обработчики событий для калькулятора
-        clearCalculatorBtn.addEventListener('click', resetCalculator);
-        backspaceBtn.addEventListener('click', backspace);
-        decimalBtn.addEventListener('click', inputDecimal);
-        plusMinusBtn.addEventListener('click', toggleSign);
-        equalsBtn.addEventListener('click', () => {
-            if (operator && !waitingForSecondOperand) {
-                const inputValue = parseFloat(calculatorDisplay.value);
-                const result = calculate(firstOperand, inputValue, operator);
-                calculatorDisplay.value = String(result);
-                firstOperand = result;
-                waitingForSecondOperand = true;
-                operator = null;
-                saveCalculatorState();
-                checkFor26();
+            // Отрисовка монет
+            for (const coin of coins) {
+                if (!coin.collected) {
+                    ctx.fillStyle = coin.color;
+                    ctx.beginPath();
+                    ctx.arc(coin.x + coin.width / 2, coin.y + coin.height / 2, coin.width / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Буква "₽" на монете
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('₽', coin.x + coin.width / 2, coin.y + coin.height / 2);
+                }
             }
-        });
-
-        numberBtns.forEach(button => {
-            button.addEventListener('click', () => {
-                inputDigit(button.textContent);
-            });
-        });
-
-        operatorBtns.forEach(button => {
-            button.addEventListener('click', () => {
-                handleOperator(button.textContent);
-            });
-        });
-
-        // Инициализация
-        document.addEventListener('DOMContentLoaded', () => {
-            toggleModeBtn.classList.add('active');
-            resetCalculator();
-            initLocalStorage();
             
-            // Загружаем текущий фон
-            if (localStorage.getItem('currentBackground')) {
-                menuApp.style.backgroundImage = `url('${localStorage.getItem('currentBackground')}')`;
-            } else {
-                localStorage.setItem('currentBackground', backgrounds[0]);
+            // Отрисовка игрока (простая анимация)
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            // Глаза для обозначения направления
+            ctx.fillStyle = '#fff';
+            switch (player.direction) {
+                case 'left':
+                    ctx.fillRect(player.x + 5, player.y + 10, 8, 8);
+                    ctx.fillRect(player.x + 5, player.y + 25, 8, 8);
+                    break;
+                case 'right':
+                    ctx.fillRect(player.x + player.width - 13, player.y + 10, 8, 8);
+                    ctx.fillRect(player.x + player.width - 13, player.y + 25, 8, 8);
+                    break;
+                case 'up':
+                    ctx.fillRect(player.x + 10, player.y + 5, 8, 8);
+                    ctx.fillRect(player.x + 25, player.y + 5, 8, 8);
+                    break;
+                case 'down':
+                    ctx.fillRect(player.x + 10, player.y + player.height - 13, 8, 8);
+                    ctx.fillRect(player.x + 25, player.y + player.height - 13, 8, 8);
+                    break;
             }
+        }
+        
+        // Игровой цикл
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Обработчики событий клавиатуры
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
         });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        // Обработчики событий кнопок меню
+        playButton.addEventListener('click', () => {
+            menu.style.display = 'none';
+            mobileControls.style.display = 'flex';
+            gameRunning = true;
+            score = 0;
+            scoreDisplay.textContent = `Счёт: ${score}`;
+            player.x = canvas.width / 2;
+            player.y = canvas.height / 2;
+            createPlatforms();
+            createCoins();
+        });
+        
+        backButton.addEventListener('click', () => {
+            window.location.href = 'https://salruz.github.io/Code/';
+        });
+        
+        // Обработчики событий сенсорного управления
+        leftButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchControls.left = true;
+        });
+        
+        leftButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchControls.left = false;
+        });
+        
+        rightButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchControls.right = true;
+        });
+        
+        rightButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchControls.right = false;
+        });
+        
+        upButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchControls.up = true;
+        });
+        
+        upButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchControls.up = false;
+        });
+        
+        downButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchControls.down = true;
+        });
+        
+        downButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchControls.down = false;
+        });
+        
+        // Также добавим обработчики для мыши (на случай тестирования на ПК)
+        leftButton.addEventListener('mousedown', () => touchControls.left = true);
+        leftButton.addEventListener('mouseup', () => touchControls.left = false);
+        leftButton.addEventListener('mouseleave', () => touchControls.left = false);
+        
+        rightButton.addEventListener('mousedown', () => touchControls.right = true);
+        rightButton.addEventListener('mouseup', () => touchControls.right = false);
+        rightButton.addEventListener('mouseleave', () => touchControls.right = false);
+        
+        upButton.addEventListener('mousedown', () => touchControls.up = true);
+        upButton.addEventListener('mouseup', () => touchControls.up = false);
+        upButton.addEventListener('mouseleave', () => touchControls.up = false);
+        
+        downButton.addEventListener('mousedown', () => touchControls.down = true);
+        downButton.addEventListener('mouseup', () => touchControls.down = false);
+        downButton.addEventListener('mouseleave', () => touchControls.down = false);
+        
+        // Запуск игрового цикла
+        gameLoop();
     </script>
 </body>
 </html>
