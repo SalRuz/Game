@@ -133,9 +133,9 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // Виртуальная игровая карта в 5 раз больше
-        const virtualWidth = canvas.width * 5;
-        const virtualHeight = canvas.height * 5;
+        // Виртуальная игровая карта (уменьшена в 2 раза)
+        const virtualWidth = canvas.width * 2.5;
+        const virtualHeight = canvas.height * 2.5;
 
         // Камера (видимая область)
         const camera = {
@@ -143,10 +143,10 @@
             y: 0,
             width: canvas.width,
             height: canvas.height,
-            baseZoom: 1, // Базовый зум камеры
-            zoom: 1,     // Текущий зум камеры
-            minZoom: 0.5, // Минимальный зум
-            maxZoom: 2    // Максимальный зум
+            baseZoom: 1,
+            zoom: 1,
+            minZoom: 0.5,
+            maxZoom: 2
         };
 
         // Позиция курсора мыши
@@ -169,7 +169,7 @@
 
         // Мелкие частицы еды
         const foodParticles = [];
-        const FOOD_COUNT = 500; // Количество частиц еды
+        const FOOD_COUNT = 300; // Количество частиц еды
 
         // Выплюнутые частицы
         const ejectedParticles = [];
@@ -203,16 +203,16 @@
         const player = {
             x: virtualWidth / 2,
             y: virtualHeight / 2,
-            radius: Math.sqrt(20 / Math.PI), // Начальный размер для 20 поинтов
+            radius: Math.sqrt(20 / Math.PI),
             color: '#ff0000',
-            speed: 8, // Начальная скорость увеличена
+            speed: 5, // Уменьшена скорость
             dx: 0,
             dy: 0,
             name: "Player",
-            score: 20, // Начальный счет 20
-            cells: [], // Массив для частей игрока
-            lastSplitTime: 0, // Время последнего разделения
-            isSplitting: false // Флаг разделения
+            score: 20,
+            cells: [],
+            lastSplitTime: 0,
+            isSplitting: false
         };
 
         // Инициализация игрока как одной клетки
@@ -228,7 +228,7 @@
 
         // Боты (начальный размер 20 поинтов)
         const bots = [];
-        const BOT_COUNT = 50; // Количество ботов оставлено прежним
+        const BOT_COUNT = 50;
 
         // Инициализация ботов
         function initBots() {
@@ -239,12 +239,12 @@
                     y: Math.random() * virtualHeight,
                     radius: Math.sqrt(botScore / Math.PI),
                     color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-                    speed: 3 + Math.random() * 2,
+                    speed: 3, // Уменьшена скорость
                     dx: (Math.random() - 0.5) * 2,
                     dy: (Math.random() - 0.5) * 2,
                     name: botNames[i % botNames.length],
                     score: botScore,
-                    cells: [] // Массив для частей ботов
+                    cells: []
                 });
                 
                 // Инициализация бота как одной клетки
@@ -312,15 +312,16 @@
                     const normDx = dx / distance;
                     const normDy = dy / distance;
                     
-                    // Создаем выплюнутую частицу
+                    // Создаем выплюнутую частицу (больше обычной еды)
                     ejectedParticles.push({
                         x: centerX,
                         y: centerY,
-                        radius: Math.sqrt(10 / Math.PI), // Размер 10 единиц
+                        radius: 4, // Больше обычной еды
                         color: player.color,
-                        dx: normDx * 10, // Скорость вылета
-                        dy: normDy * 10,
-                        score: 10
+                        dx: normDx * 12, // Скорость вылета
+                        dy: normDy * 12,
+                        score: 10,
+                        isEjected: true // Отличаем от обычной еды
                     });
                     
                     // Уменьшаем массу игрока
@@ -383,9 +384,14 @@
                             y: largestCell.y,
                             radius: Math.sqrt(newScore / Math.PI),
                             color: player.color,
-                            dx: normDx * 15, // Скорость разделения
-                            dy: normDy * 15,
-                            score: newScore
+                            dx: normDx * 20, // Высокая начальная скорость
+                            dy: normDy * 20,
+                            score: newScore,
+                            splitVelocity: { // Сохраняем начальную скорость для плавного замедления
+                                x: normDx * 20,
+                                y: normDy * 20,
+                                timer: 30 // Таймер для замедления
+                            }
                         };
                         
                         player.cells.push(newCell);
@@ -453,11 +459,15 @@
         // Обновление позиции камеры (зависит от массы игрока)
         function updateCamera() {
             // Вычисляем зум камеры на основе массы игрока
-            // Плавное увеличение обзора до массы 21500
-            if (player.score < 21500) {
-                camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, 1 + player.score / 10000));
+            // Маленький зум (больший обзор) при маленькой массе
+            // 4x4 клетки при массе 20, постепенно увеличивается
+            if (player.score <= 20) {
+                camera.zoom = 0.5; // Маленькая масса - большой обзор
+            } else if (player.score > 20 && player.score < 1000) {
+                // Плавное увеличение зума с ростом массы
+                camera.zoom = 0.5 + (player.score - 20) / 2000;
             } else {
-                camera.zoom = camera.maxZoom;
+                camera.zoom = Math.min(camera.maxZoom, 1 + player.score / 5000);
             }
             
             // Обновляем размер камеры на основе зума
@@ -485,6 +495,14 @@
             if (camera.y < 0) camera.y = 0;
             if (camera.x + camera.width > virtualWidth) camera.x = virtualWidth - camera.width;
             if (camera.y + camera.height > virtualHeight) camera.y = virtualHeight - camera.height;
+        }
+
+        // Расчет скорости на основе массы
+        function calculateSpeed(baseSpeed, mass) {
+            // С каждой сотней массы скорость снижается на 0.1
+            const speedReduction = Math.floor(mass / 100) * 0.1;
+            // Минимальная скорость - 2
+            return Math.max(2, baseSpeed - speedReduction);
         }
 
         // Обновление позиции игрока (следование за курсором мыши)
@@ -516,17 +534,30 @@
                 const normDx = dx / distance;
                 const normDy = dy / distance;
                 
-                // Вычисляем скорость (зависит от массы, но не ниже минимальной)
-                const baseSpeed = 8; // Базовая скорость
-                const speed = Math.max(2, baseSpeed * (30 / Math.max(30, player.score)));
-                
-                // Если масса больше 21500, фиксируем скорость
-                const finalSpeed = player.score > 21500 ? 2 : speed;
+                // Вычисляем скорость на основе массы
+                const speed = calculateSpeed(5, player.score);
                 
                 // Обновляем направление для каждой клетки
                 player.cells.forEach(cell => {
-                    cell.dx = normDx * finalSpeed;
-                    cell.dy = normDy * finalSpeed;
+                    // Если клетка имеет splitVelocity, замедляем ее
+                    if (cell.splitVelocity && cell.splitVelocity.timer > 0) {
+                        cell.dx = cell.splitVelocity.x;
+                        cell.dy = cell.splitVelocity.y;
+                        cell.splitVelocity.timer--;
+                        
+                        // Постепенно уменьшаем скорость разделения
+                        cell.splitVelocity.x *= 0.9;
+                        cell.splitVelocity.y *= 0.9;
+                    } else {
+                        // Обычное движение к курсору
+                        cell.dx = normDx * speed;
+                        cell.dy = normDy * speed;
+                        
+                        // Удаляем свойство splitVelocity после замедления
+                        if (cell.splitVelocity) {
+                            delete cell.splitVelocity;
+                        }
+                    }
                     
                     cell.x += cell.dx;
                     cell.y += cell.dy;
@@ -558,6 +589,13 @@
                 
                 // Удаляем частицу, если она почти остановилась
                 if (Math.abs(particle.dx) < 0.1 && Math.abs(particle.dy) < 0.1) {
+                    // Вместо удаления, превращаем в обычную еду
+                    foodParticles.push({
+                        x: particle.x,
+                        y: particle.y,
+                        radius: 2,
+                        color: particle.color
+                    });
                     ejectedParticles.splice(i, 1);
                 }
                 
@@ -602,7 +640,7 @@
                 // Случайное изменение направления
                 if (Math.random() < 0.02) {
                     const angle = Math.random() * Math.PI * 2;
-                    const speed = bot.speed;
+                    const speed = calculateSpeed(3, bot.score);
                     
                     bot.cells.forEach(cell => {
                         cell.dx = Math.cos(angle) * speed;
@@ -652,7 +690,7 @@
                             const distance = Math.sqrt(dx * dx + dy * dy);
                             
                             if (distance < cell1.radius + cell2.radius) {
-                                if (cell1.score > cell2.score) {
+                                if (cell1.score > cell2.score * 1.1) {
                                     // Клетка1 съедает клетку2
                                     cell1.score += cell2.score;
                                     cell1.radius = Math.sqrt(cell1.score / Math.PI);
@@ -663,7 +701,7 @@
                                         bots.splice(j, 1);
                                         respawnBot();
                                     }
-                                } else if (cell2.score > cell1.score) {
+                                } else if (cell2.score > cell1.score * 1.1) {
                                     // Клетка2 съедает клетку1
                                     cell2.score += cell1.score;
                                     cell2.radius = Math.sqrt(cell2.score / Math.PI);
@@ -747,7 +785,7 @@
                 }
                 
                 // Проверка для ботов
-                if (i < ejectedParticles.length) { // Проверяем, что частица еще существует
+                if (i < ejectedParticles.length) {
                     for (let j = 0; j < bots.length; j++) {
                         const bot = bots[j];
                         
@@ -766,7 +804,7 @@
                             }
                         }
                         
-                        if (i >= ejectedParticles.length) break; // Выходим, если частица была удалена
+                        if (i >= ejectedParticles.length) break;
                     }
                 }
             }
@@ -794,7 +832,7 @@
                 y: Math.random() * virtualHeight,
                 radius: Math.sqrt(botScore / Math.PI),
                 color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-                speed: 3 + Math.random() * 2,
+                speed: 3,
                 dx: (Math.random() - 0.5) * 2,
                 dy: (Math.random() - 0.5) * 2,
                 name: botNames[Math.floor(Math.random() * botNames.length)],
@@ -813,6 +851,25 @@
             });
             
             bots.push(newBot);
+        }
+
+        // Респаун игрока после смерти
+        function respawnPlayer() {
+            player.x = Math.random() * virtualWidth;
+            player.y = Math.random() * virtualHeight;
+            player.radius = Math.sqrt(20 / Math.PI);
+            player.score = 20;
+            player.cells = [{
+                x: player.x,
+                y: player.y,
+                radius: player.radius,
+                color: player.color,
+                dx: 0,
+                dy: 0,
+                score: player.score
+            }];
+            player.lastSplitTime = 0;
+            player.isSplitting = false;
         }
 
         // Проверка столкновений игрока с ботами
@@ -850,10 +907,9 @@
                                 botCell.radius = Math.sqrt(botCell.score / Math.PI);
                                 player.cells.splice(k, 1);
                                 
-                                // Если у игрока не осталось клеток, игра окончена
+                                // Если у игрока не осталось клеток, респавним его
                                 if (player.cells.length === 0) {
-                                    showGameOverMenu();
-                                    return;
+                                    respawnPlayer();
                                 }
                             }
                         }
@@ -862,7 +918,7 @@
             }
         }
 
-        // Обновление таблицы лидеров (без отображения массы)
+        // Обновление таблицы лидеров
         function updateLeaderboard() {
             // Создаем массив всех объектов (боты + игрок)
             const allPlayers = [...bots.map(bot => ({
@@ -908,21 +964,7 @@
 
         // Рестарт игры
         function restartGame() {
-            player.x = virtualWidth / 2;
-            player.y = virtualHeight / 2;
-            player.radius = Math.sqrt(20 / Math.PI);
-            player.score = 20;
-            player.cells = [{
-                x: player.x,
-                y: player.y,
-                radius: player.radius,
-                color: player.color,
-                dx: 0,
-                dy: 0,
-                score: player.score
-            }];
-            player.lastSplitTime = 0;
-            player.isSplitting = false;
+            respawnPlayer();
             
             // Очищаем ботов и создаем заново
             bots.length = 0;
@@ -962,7 +1004,7 @@
                 ctx.closePath();
             });
             
-            // Отрисовка выплюнутых частиц
+            // Отрисовка выплюнутых частиц (они больше обычной еды)
             ejectedParticles.forEach(particle => {
                 ctx.beginPath();
                 ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
