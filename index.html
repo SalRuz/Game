@@ -12,7 +12,6 @@
             background-color: #f0f0f0;
             touch-action: none;
             font-family: Arial, sans-serif;
-            cursor: none;
         }
         #gameCanvas {
             display: block;
@@ -75,17 +74,6 @@
             border: 1px solid rgba(255, 0, 0, 0.5);
             border-radius: 2px;
         }
-        #customCursor {
-            position: fixed;
-            width: 20px;
-            height: 20px;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 50%;
-            pointer-events: none;
-            z-index: 100;
-            transform: translate(-50%, -50%);
-            display: none;
-        }
         @media (orientation: portrait) {
             #orientation-message {
                 position: fixed;
@@ -108,6 +96,16 @@
                 display: none;
             }
         }
+        #controlsInfo {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 15;
+        }
     </style>
 </head>
 <body>
@@ -115,9 +113,9 @@
         Пожалуйста, поверните устройство в горизонтальное положение для игры
     </div>
     <canvas id="gameCanvas"></canvas>
-    <div id="customCursor"></div>
     <div id="massIndicator">Масса: 20</div>
     <div id="leaderboard"></div>
+    <div id="controlsInfo">Управление: W - выплюнуть массу, Пробел - разделиться</div>
     <div id="gameOverMenu">
         <div>Game Over!</div>
         <button id="restartButton">Restart</button>
@@ -130,7 +128,6 @@
         const restartButton = document.getElementById('restartButton');
         const leaderboardElement = document.getElementById('leaderboard');
         const massIndicator = document.getElementById('massIndicator');
-        const customCursor = document.getElementById('customCursor');
 
         // Устанавливаем размер канваса на весь экран
         canvas.width = window.innerWidth;
@@ -174,6 +171,12 @@
         const foodParticles = [];
         const FOOD_COUNT = 500; // Количество частиц еды
 
+        // Выплюнутые частицы
+        const ejectedParticles = [];
+
+        // Клавиши управления
+        const keys = {};
+
         // Инициализация частиц еды
         function initFood() {
             for (let i = 0; i < FOOD_COUNT; i++) {
@@ -202,12 +205,26 @@
             y: virtualHeight / 2,
             radius: Math.sqrt(20 / Math.PI), // Начальный размер для 20 поинтов
             color: '#ff0000',
-            speed: 5,
+            speed: 8, // Начальная скорость увеличена
             dx: 0,
             dy: 0,
             name: "Player",
-            score: 20 // Начальный счет 20
+            score: 20, // Начальный счет 20
+            cells: [], // Массив для частей игрока
+            lastSplitTime: 0, // Время последнего разделения
+            isSplitting: false // Флаг разделения
         };
+
+        // Инициализация игрока как одной клетки
+        player.cells.push({
+            x: player.x,
+            y: player.y,
+            radius: player.radius,
+            color: player.color,
+            dx: 0,
+            dy: 0,
+            score: player.score
+        });
 
         // Боты (начальный размер 20 поинтов)
         const bots = [];
@@ -216,16 +233,29 @@
         // Инициализация ботов
         function initBots() {
             for (let i = 0; i < BOT_COUNT; i++) {
+                const botScore = 20;
                 bots.push({
                     x: Math.random() * virtualWidth,
                     y: Math.random() * virtualHeight,
-                    radius: Math.sqrt(20 / Math.PI), // Начальный размер для 20 поинтов
+                    radius: Math.sqrt(botScore / Math.PI),
                     color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-                    speed: 1 + Math.random() * 1,
+                    speed: 3 + Math.random() * 2,
                     dx: (Math.random() - 0.5) * 2,
                     dy: (Math.random() - 0.5) * 2,
                     name: botNames[i % botNames.length],
-                    score: 20 // Начальный счет 20
+                    score: botScore,
+                    cells: [] // Массив для частей ботов
+                });
+                
+                // Инициализация бота как одной клетки
+                bots[i].cells.push({
+                    x: bots[i].x,
+                    y: bots[i].y,
+                    radius: bots[i].radius,
+                    color: bots[i].color,
+                    dx: bots[i].dx,
+                    dy: bots[i].dy,
+                    score: bots[i].score
                 });
             }
         }
@@ -235,16 +265,166 @@
             const rect = canvas.getBoundingClientRect();
             mouseX = e.clientX - rect.left;
             mouseY = e.clientY - rect.top;
-            
-            // Обновление позиции кастомного курсора
-            customCursor.style.display = 'block';
-            customCursor.style.left = e.clientX + 'px';
-            customCursor.style.top = e.clientY + 'px';
         });
 
-        canvas.addEventListener('mouseleave', () => {
-            customCursor.style.display = 'none';
+        // Обработка нажатий клавиш
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            
+            // Выплевывание массы по клавише W
+            if (e.key === 'w' || e.key === 'W' || e.key === 'ц' || e.key === 'Ц') {
+                ejectMass();
+            }
+            
+            // Разделение по пробелу
+            if (e.key === ' ') {
+                splitPlayer();
+            }
         });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Выплевывание массы
+        function ejectMass() {
+            // Проверяем, что у игрока достаточно массы (минимум 20)
+            if (player.score >= 20) {
+                // Находим центр всех клеток игрока
+                let centerX = 0;
+                let centerY = 0;
+                
+                player.cells.forEach(cell => {
+                    centerX += cell.x;
+                    centerY += cell.y;
+                });
+                
+                centerX /= player.cells.length;
+                centerY /= player.cells.length;
+                
+                // Направление выплевывания - к курсору мыши
+                const dx = mouseX - centerX;
+                const dy = mouseY - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) {
+                    // Нормализуем направление
+                    const normDx = dx / distance;
+                    const normDy = dy / distance;
+                    
+                    // Создаем выплюнутую частицу
+                    ejectedParticles.push({
+                        x: centerX,
+                        y: centerY,
+                        radius: Math.sqrt(10 / Math.PI), // Размер 10 единиц
+                        color: player.color,
+                        dx: normDx * 10, // Скорость вылета
+                        dy: normDy * 10,
+                        score: 10
+                    });
+                    
+                    // Уменьшаем массу игрока
+                    player.score -= 10;
+                    
+                    // Обновляем массу всех клеток пропорционально
+                    const totalMass = player.cells.reduce((sum, cell) => sum + cell.score, 0);
+                    player.cells.forEach(cell => {
+                        cell.score = (cell.score / totalMass) * player.score;
+                        cell.radius = Math.sqrt(cell.score / Math.PI);
+                    });
+                }
+            }
+        }
+
+        // Разделение игрока
+        function splitPlayer() {
+            // Проверяем, что у игрока достаточно массы и меньше 16 частей
+            if (player.score >= 20 && player.cells.length < 16) {
+                // Находим центр всех клеток игрока
+                let centerX = 0;
+                let centerY = 0;
+                
+                player.cells.forEach(cell => {
+                    centerX += cell.x;
+                    centerY += cell.y;
+                });
+                
+                centerX /= player.cells.length;
+                centerY /= player.cells.length;
+                
+                // Направление разделения - к курсору мыши
+                const dx = mouseX - centerX;
+                const dy = mouseY - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) {
+                    // Нормализуем направление
+                    const normDx = dx / distance;
+                    const normDy = dy / distance;
+                    
+                    // Создаем новую клетку из самой большой существующей
+                    let largestCell = player.cells[0];
+                    for (let i = 1; i < player.cells.length; i++) {
+                        if (player.cells[i].score > largestCell.score) {
+                            largestCell = player.cells[i];
+                        }
+                    }
+                    
+                    // Проверяем, что клетка достаточно большая для разделения
+                    if (largestCell.score >= 20) {
+                        // Уменьшаем исходную клетку вдвое
+                        const newScore = largestCell.score / 2;
+                        largestCell.score = newScore;
+                        largestCell.radius = Math.sqrt(newScore / Math.PI);
+                        
+                        // Создаем новую клетку
+                        const newCell = {
+                            x: largestCell.x,
+                            y: largestCell.y,
+                            radius: Math.sqrt(newScore / Math.PI),
+                            color: player.color,
+                            dx: normDx * 15, // Скорость разделения
+                            dy: normDy * 15,
+                            score: newScore
+                        };
+                        
+                        player.cells.push(newCell);
+                        player.lastSplitTime = Date.now();
+                        player.isSplitting = true;
+                    }
+                }
+            }
+        }
+
+        // Объединение клеток игрока после разделения
+        function mergePlayerCells() {
+            if (player.isSplitting && Date.now() - player.lastSplitTime > 30000) {
+                // Находим центр всех клеток
+                let centerX = 0;
+                let centerY = 0;
+                
+                player.cells.forEach(cell => {
+                    centerX += cell.x;
+                    centerY += cell.y;
+                });
+                
+                centerX /= player.cells.length;
+                centerY /= player.cells.length;
+                
+                // Объединяем все клетки в одну
+                player.cells = [{
+                    x: centerX,
+                    y: centerY,
+                    radius: Math.sqrt(player.score / Math.PI),
+                    color: player.color,
+                    dx: 0,
+                    dy: 0,
+                    score: player.score
+                }];
+                
+                player.isSplitting = false;
+            }
+        }
 
         // Отрисовка фона в клетку
         function drawGrid() {
@@ -273,16 +453,32 @@
         // Обновление позиции камеры (зависит от массы игрока)
         function updateCamera() {
             // Вычисляем зум камеры на основе массы игрока
-            // Чем больше масса, тем больше обзор (меньше зум)
-            camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, 100 / player.score));
+            // Плавное увеличение обзора до массы 21500
+            if (player.score < 21500) {
+                camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, 1 + player.score / 10000));
+            } else {
+                camera.zoom = camera.maxZoom;
+            }
             
             // Обновляем размер камеры на основе зума
             camera.width = canvas.width / camera.zoom;
             camera.height = canvas.height / camera.zoom;
             
-            // Позиция камеры следует за игроком
-            camera.x = player.x - camera.width / 2;
-            camera.y = player.y - camera.height / 2;
+            // Находим центр всех клеток игрока
+            let centerX = 0;
+            let centerY = 0;
+            
+            player.cells.forEach(cell => {
+                centerX += cell.x;
+                centerY += cell.y;
+            });
+            
+            centerX /= player.cells.length;
+            centerY /= player.cells.length;
+            
+            // Позиция камеры следует за центром клеток игрока
+            camera.x = centerX - camera.width / 2;
+            camera.y = centerY - camera.height / 2;
 
             // Ограничение по границам виртуальной карты
             if (camera.x < 0) camera.x = 0;
@@ -293,63 +489,150 @@
 
         // Обновление позиции игрока (следование за курсором мыши)
         function updatePlayer() {
+            // Вычисляем центр всех клеток игрока
+            let centerX = 0;
+            let centerY = 0;
+            
+            player.cells.forEach(cell => {
+                centerX += cell.x;
+                centerY += cell.y;
+            });
+            
+            centerX /= player.cells.length;
+            centerY /= player.cells.length;
+            
             // Вычисляем направление к курсору мыши
             const targetX = camera.x + mouseX / camera.zoom;
             const targetY = camera.y + mouseY / camera.zoom;
             
-            const dx = targetX - player.x;
-            const dy = targetY - player.y;
+            const dx = targetX - centerX;
+            const dy = targetY - centerY;
             
             // Вычисляем расстояние до цели
             const distance = Math.sqrt(dx * dx + dy * dy);
             
             if (distance > 5) {
-                // Нормализуем направление и умножаем на скорость
-                // Скорость уменьшается с увеличением массы
-                const speed = Math.max(2, player.speed * (30 / player.score));
-                player.dx = (dx / distance) * speed;
-                player.dy = (dy / distance) * speed;
+                // Нормализуем направление
+                const normDx = dx / distance;
+                const normDy = dy / distance;
                 
-                player.x += player.dx;
-                player.y += player.dy;
+                // Вычисляем скорость (зависит от массы, но не ниже минимальной)
+                const baseSpeed = 8; // Базовая скорость
+                const speed = Math.max(2, baseSpeed * (30 / Math.max(30, player.score)));
+                
+                // Если масса больше 21500, фиксируем скорость
+                const finalSpeed = player.score > 21500 ? 2 : speed;
+                
+                // Обновляем направление для каждой клетки
+                player.cells.forEach(cell => {
+                    cell.dx = normDx * finalSpeed;
+                    cell.dy = normDy * finalSpeed;
+                    
+                    cell.x += cell.dx;
+                    cell.y += cell.dy;
+                    
+                    // Ограничение по границам виртуальной карты
+                    if (cell.x - cell.radius < 0) cell.x = cell.radius;
+                    if (cell.x + cell.radius > virtualWidth) cell.x = virtualWidth - cell.radius;
+                    if (cell.y - cell.radius < 0) cell.y = cell.radius;
+                    if (cell.y + cell.radius > virtualHeight) cell.y = virtualHeight - cell.radius;
+                });
             }
+            
+            // Объединение клеток после разделения
+            mergePlayerCells();
+        }
 
-            // Ограничение по границам виртуальной карты
-            if (player.x - player.radius < 0) player.x = player.radius;
-            if (player.x + player.radius > virtualWidth) player.x = virtualWidth - player.radius;
-            if (player.y - player.radius < 0) player.y = player.radius;
-            if (player.y + player.radius > virtualHeight) player.y = virtualHeight - player.radius;
+        // Обновление выплюнутых частиц
+        function updateEjectedParticles() {
+            for (let i = ejectedParticles.length - 1; i >= 0; i--) {
+                const particle = ejectedParticles[i];
+                
+                // Двигаем частицу
+                particle.x += particle.dx;
+                particle.y += particle.dy;
+                
+                // Замедляем частицу
+                particle.dx *= 0.95;
+                particle.dy *= 0.95;
+                
+                // Удаляем частицу, если она почти остановилась
+                if (Math.abs(particle.dx) < 0.1 && Math.abs(particle.dy) < 0.1) {
+                    ejectedParticles.splice(i, 1);
+                }
+                
+                // Ограничение по границам виртуальной карты
+                if (particle.x - particle.radius < 0) {
+                    particle.x = particle.radius;
+                    particle.dx *= -0.5;
+                }
+                if (particle.x + particle.radius > virtualWidth) {
+                    particle.x = virtualWidth - particle.radius;
+                    particle.dx *= -0.5;
+                }
+                if (particle.y - particle.radius < 0) {
+                    particle.y = particle.radius;
+                    particle.dy *= -0.5;
+                }
+                if (particle.y + particle.radius > virtualHeight) {
+                    particle.y = virtualHeight - particle.radius;
+                    particle.dy *= -0.5;
+                }
+            }
         }
 
         // Обновление позиции ботов
         function updateBots() {
             bots.forEach(bot => {
-                bot.x += bot.dx;
-                bot.y += bot.dy;
-
+                // Обновляем центр бота
+                let centerX = 0;
+                let centerY = 0;
+                
+                bot.cells.forEach(cell => {
+                    centerX += cell.x;
+                    centerY += cell.y;
+                });
+                
+                centerX /= bot.cells.length;
+                centerY /= bot.cells.length;
+                
+                bot.x = centerX;
+                bot.y = centerY;
+                
                 // Случайное изменение направления
                 if (Math.random() < 0.02) {
-                    bot.dx = (Math.random() - 0.5) * bot.speed;
-                    bot.dy = (Math.random() - 0.5) * bot.speed;
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = bot.speed;
+                    
+                    bot.cells.forEach(cell => {
+                        cell.dx = Math.cos(angle) * speed;
+                        cell.dy = Math.sin(angle) * speed;
+                    });
                 }
-
-                // Ограничение по границам виртуальной карты
-                if (bot.x - bot.radius < 0) {
-                    bot.x = bot.radius;
-                    bot.dx *= -1;
-                }
-                if (bot.x + bot.radius > virtualWidth) {
-                    bot.x = virtualWidth - bot.radius;
-                    bot.dx *= -1;
-                }
-                if (bot.y - bot.radius < 0) {
-                    bot.y = bot.radius;
-                    bot.dy *= -1;
-                }
-                if (bot.y + bot.radius > virtualHeight) {
-                    bot.y = virtualHeight - bot.radius;
-                    bot.dy *= -1;
-                }
+                
+                // Двигаем все клетки бота
+                bot.cells.forEach(cell => {
+                    cell.x += cell.dx;
+                    cell.y += cell.dy;
+                    
+                    // Ограничение по границам виртуальной карты
+                    if (cell.x - cell.radius < 0) {
+                        cell.x = cell.radius;
+                        cell.dx *= -1;
+                    }
+                    if (cell.x + cell.radius > virtualWidth) {
+                        cell.x = virtualWidth - cell.radius;
+                        cell.dx *= -1;
+                    }
+                    if (cell.y - cell.radius < 0) {
+                        cell.y = cell.radius;
+                        cell.dy *= -1;
+                    }
+                    if (cell.y + cell.radius > virtualHeight) {
+                        cell.y = virtualHeight - cell.radius;
+                        cell.dy *= -1;
+                    }
+                });
             });
 
             // Проверка столкновений между ботами
@@ -357,23 +640,42 @@
                 for (let j = i + 1; j < bots.length; j++) {
                     const bot1 = bots[i];
                     const bot2 = bots[j];
-                    const dx = bot1.x - bot2.x;
-                    const dy = bot1.y - bot2.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance < bot1.radius + bot2.radius) {
-                        if (bot1.score > bot2.score) {
-                            // Бот1 съедает бота2
-                            bot1.score += bot2.score;
-                            bot1.radius = Math.sqrt(bot1.score / Math.PI);
-                            bots.splice(j, 1);
-                            respawnBot();
-                        } else if (bot2.score > bot1.score) {
-                            // Бот2 съедает бота1
-                            bot2.score += bot1.score;
-                            bot2.radius = Math.sqrt(bot2.score / Math.PI);
-                            bots.splice(i, 1);
-                            respawnBot();
+                    
+                    // Проверяем столкновения между всеми клетками ботов
+                    for (let k = 0; k < bot1.cells.length; k++) {
+                        for (let l = 0; l < bot2.cells.length; l++) {
+                            const cell1 = bot1.cells[k];
+                            const cell2 = bot2.cells[l];
+                            
+                            const dx = cell1.x - cell2.x;
+                            const dy = cell1.y - cell2.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < cell1.radius + cell2.radius) {
+                                if (cell1.score > cell2.score) {
+                                    // Клетка1 съедает клетку2
+                                    cell1.score += cell2.score;
+                                    cell1.radius = Math.sqrt(cell1.score / Math.PI);
+                                    bot2.cells.splice(l, 1);
+                                    
+                                    // Если у бота не осталось клеток, респавним его
+                                    if (bot2.cells.length === 0) {
+                                        bots.splice(j, 1);
+                                        respawnBot();
+                                    }
+                                } else if (cell2.score > cell1.score) {
+                                    // Клетка2 съедает клетку1
+                                    cell2.score += cell1.score;
+                                    cell2.radius = Math.sqrt(cell2.score / Math.PI);
+                                    bot1.cells.splice(k, 1);
+                                    
+                                    // Если у бота не осталось клеток, респавним его
+                                    if (bot1.cells.length === 0) {
+                                        bots.splice(i, 1);
+                                        respawnBot();
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -385,14 +687,20 @@
             // Проверка для игрока
             for (let i = foodParticles.length - 1; i >= 0; i--) {
                 const food = foodParticles[i];
-                const dx = player.x - food.x;
-                const dy = player.y - food.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
                 
-                if (distance < player.radius + food.radius) {
-                    player.score += 1;
-                    player.radius = Math.sqrt(player.score / Math.PI);
-                    foodParticles.splice(i, 1);
+                for (let j = 0; j < player.cells.length; j++) {
+                    const cell = player.cells[j];
+                    const dx = cell.x - food.x;
+                    const dy = cell.y - food.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < cell.radius + food.radius) {
+                        cell.score += 1;
+                        player.score += 1;
+                        cell.radius = Math.sqrt(cell.score / Math.PI);
+                        foodParticles.splice(i, 1);
+                        break;
+                    }
                 }
             }
             
@@ -400,17 +708,68 @@
             bots.forEach(bot => {
                 for (let i = foodParticles.length - 1; i >= 0; i--) {
                     const food = foodParticles[i];
-                    const dx = bot.x - food.x;
-                    const dy = bot.y - food.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
                     
-                    if (distance < bot.radius + food.radius) {
-                        bot.score += 1;
-                        bot.radius = Math.sqrt(bot.score / Math.PI);
-                        foodParticles.splice(i, 1);
+                    for (let j = 0; j < bot.cells.length; j++) {
+                        const cell = bot.cells[j];
+                        const dx = cell.x - food.x;
+                        const dy = cell.y - food.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < cell.radius + food.radius) {
+                            cell.score += 1;
+                            bot.score += 1;
+                            cell.radius = Math.sqrt(cell.score / Math.PI);
+                            foodParticles.splice(i, 1);
+                            break;
+                        }
                     }
                 }
             });
+            
+            // Проверка сбора выплюнутых частиц
+            for (let i = ejectedParticles.length - 1; i >= 0; i--) {
+                const particle = ejectedParticles[i];
+                
+                // Проверка для игрока
+                for (let j = 0; j < player.cells.length; j++) {
+                    const cell = player.cells[j];
+                    const dx = cell.x - particle.x;
+                    const dy = cell.y - particle.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < cell.radius + particle.radius && cell.score > 10) {
+                        cell.score += particle.score;
+                        player.score += particle.score;
+                        cell.radius = Math.sqrt(cell.score / Math.PI);
+                        ejectedParticles.splice(i, 1);
+                        break;
+                    }
+                }
+                
+                // Проверка для ботов
+                if (i < ejectedParticles.length) { // Проверяем, что частица еще существует
+                    for (let j = 0; j < bots.length; j++) {
+                        const bot = bots[j];
+                        
+                        for (let k = 0; k < bot.cells.length; k++) {
+                            const cell = bot.cells[k];
+                            const dx = cell.x - particle.x;
+                            const dy = cell.y - particle.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < cell.radius + particle.radius && cell.score > 10) {
+                                cell.score += particle.score;
+                                bot.score += particle.score;
+                                cell.radius = Math.sqrt(cell.score / Math.PI);
+                                ejectedParticles.splice(i, 1);
+                                break;
+                            }
+                        }
+                        
+                        if (i >= ejectedParticles.length) break; // Выходим, если частица была удалена
+                    }
+                }
+            }
         }
 
         // Добавление новой еды (20 штук каждую секунду)
@@ -429,38 +788,75 @@
 
         // Респаун бота
         function respawnBot() {
-            bots.push({
+            const botScore = 20;
+            const newBot = {
                 x: Math.random() * virtualWidth,
                 y: Math.random() * virtualHeight,
-                radius: Math.sqrt(20 / Math.PI), // Начальный размер для 20 поинтов
+                radius: Math.sqrt(botScore / Math.PI),
                 color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-                speed: 1 + Math.random() * 1,
+                speed: 3 + Math.random() * 2,
                 dx: (Math.random() - 0.5) * 2,
                 dy: (Math.random() - 0.5) * 2,
                 name: botNames[Math.floor(Math.random() * botNames.length)],
-                score: 20 // Начальный счет 20
+                score: botScore,
+                cells: []
+            };
+            
+            newBot.cells.push({
+                x: newBot.x,
+                y: newBot.y,
+                radius: newBot.radius,
+                color: newBot.color,
+                dx: newBot.dx,
+                dy: newBot.dy,
+                score: newBot.score
             });
+            
+            bots.push(newBot);
         }
 
         // Проверка столкновений игрока с ботами
         function checkCollisions() {
             for (let i = 0; i < bots.length; i++) {
                 const bot = bots[i];
-                const dx = player.x - bot.x;
-                const dy = player.y - bot.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < player.radius + bot.radius) {
-                    if (player.score > bot.score) {
-                        // Игрок съедает бота
-                        player.score += bot.score;
-                        player.radius = Math.sqrt(player.score / Math.PI);
-                        bots.splice(i, 1);
-                        respawnBot();
-                    } else {
-                        // Бот съедает игрока
-                        showGameOverMenu();
-                        return;
+                
+                for (let j = 0; j < bot.cells.length; j++) {
+                    const botCell = bot.cells[j];
+                    
+                    for (let k = 0; k < player.cells.length; k++) {
+                        const playerCell = player.cells[k];
+                        
+                        const dx = playerCell.x - botCell.x;
+                        const dy = playerCell.y - botCell.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < playerCell.radius + botCell.radius) {
+                            if (playerCell.score > botCell.score * 1.1) {
+                                // Игрок съедает бота
+                                playerCell.score += botCell.score;
+                                player.score += botCell.score;
+                                playerCell.radius = Math.sqrt(playerCell.score / Math.PI);
+                                bot.cells.splice(j, 1);
+                                
+                                // Если у бота не осталось клеток, респавним его
+                                if (bot.cells.length === 0) {
+                                    bots.splice(i, 1);
+                                    respawnBot();
+                                }
+                            } else if (botCell.score > playerCell.score * 1.1) {
+                                // Бот съедает игрока
+                                botCell.score += playerCell.score;
+                                bot.score += playerCell.score;
+                                botCell.radius = Math.sqrt(botCell.score / Math.PI);
+                                player.cells.splice(k, 1);
+                                
+                                // Если у игрока не осталось клеток, игра окончена
+                                if (player.cells.length === 0) {
+                                    showGameOverMenu();
+                                    return;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -471,18 +867,16 @@
             // Создаем массив всех объектов (боты + игрок)
             const allPlayers = [...bots.map(bot => ({
                 name: bot.name,
-                isPlayer: false
+                isPlayer: false,
+                score: bot.score
             })), {
                 name: player.name,
-                isPlayer: true
+                isPlayer: true,
+                score: player.score
             }];
             
             // Сортируем по очкам (по убыванию)
-            allPlayers.sort((a, b) => {
-                const aScore = a.isPlayer ? player.score : bots.find(b => b.name === a.name)?.score || 0;
-                const bScore = b.isPlayer ? player.score : bots.find(b => b.name === b.name)?.score || 0;
-                return bScore - aScore;
-            });
+            allPlayers.sort((a, b) => b.score - a.score);
             
             // Берем топ-10
             const topPlayers = allPlayers.slice(0, 10);
@@ -518,6 +912,17 @@
             player.y = virtualHeight / 2;
             player.radius = Math.sqrt(20 / Math.PI);
             player.score = 20;
+            player.cells = [{
+                x: player.x,
+                y: player.y,
+                radius: player.radius,
+                color: player.color,
+                dx: 0,
+                dy: 0,
+                score: player.score
+            }];
+            player.lastSplitTime = 0;
+            player.isSplitting = false;
             
             // Очищаем ботов и создаем заново
             bots.length = 0;
@@ -526,6 +931,9 @@
             // Очищаем и заново генерируем еду
             foodParticles.length = 0;
             initFood();
+            
+            // Очищаем выплюнутые частицы
+            ejectedParticles.length = 0;
             
             hideGameOverMenu();
         }
@@ -553,34 +961,51 @@
                 ctx.fill();
                 ctx.closePath();
             });
+            
+            // Отрисовка выплюнутых частиц
+            ejectedParticles.forEach(particle => {
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+                ctx.fillStyle = particle.color;
+                ctx.fill();
+                ctx.closePath();
+            });
 
             // Отрисовка ботов
             bots.forEach(bot => {
-                ctx.beginPath();
-                ctx.arc(bot.x, bot.y, bot.radius, 0, Math.PI * 2);
-                ctx.fillStyle = bot.color;
-                ctx.fill();
-                ctx.closePath();
-                
-                // Отображение имени бота
-                ctx.fillStyle = '#000000';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(bot.name, bot.x, bot.y + bot.radius + 15);
+                bot.cells.forEach(cell => {
+                    ctx.beginPath();
+                    ctx.arc(cell.x, cell.y, cell.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = cell.color;
+                    ctx.fill();
+                    ctx.closePath();
+                    
+                    // Отображение имени бота над первой клеткой
+                    if (cell === bot.cells[0]) {
+                        ctx.fillStyle = '#000000';
+                        ctx.font = '12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(bot.name, cell.x, cell.y + cell.radius + 15);
+                    }
+                });
             });
 
             // Отрисовка игрока
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-            ctx.fillStyle = player.color;
-            ctx.fill();
-            ctx.closePath();
-            
-            // Отображение имени игрока
-            ctx.fillStyle = '#000000';
-            ctx.font = '14px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(player.name, player.x, player.y + player.radius + 15);
+            player.cells.forEach((cell, index) => {
+                ctx.beginPath();
+                ctx.arc(cell.x, cell.y, cell.radius, 0, Math.PI * 2);
+                ctx.fillStyle = cell.color;
+                ctx.fill();
+                ctx.closePath();
+                
+                // Отображение имени игрока над первой клеткой
+                if (index === 0) {
+                    ctx.fillStyle = '#000000';
+                    ctx.font = '14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(player.name, cell.x, cell.y + cell.radius + 15);
+                }
+            });
             
             // Восстанавливаем состояние контекста
             ctx.restore();
@@ -593,6 +1018,7 @@
         function gameLoop() {
             updatePlayer();
             updateCamera();
+            updateEjectedParticles();
             updateBots();
             checkFoodCollection();
             checkCollisions();
