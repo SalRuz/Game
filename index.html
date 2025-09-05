@@ -70,6 +70,27 @@
             border-radius: 5px;
             cursor: pointer;
         }
+        #leaderboard {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            min-width: 150px;
+            font-size: 14px;
+            z-index: 15;
+        }
+        .player-entry {
+            margin: 5px 0;
+        }
+        .player-entry.player {
+            color: red;
+            font-weight: bold;
+            padding: 2px;
+            border: 2px solid rgba(255, 0, 0, 0.5);
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -78,6 +99,7 @@
         <div id="joystick-base"></div>
         <div id="joystick-thumb"></div>
     </div>
+    <div id="leaderboard"></div>
     <div id="gameOverMenu">
         <div>Game Over!</div>
         <button id="restartButton">Restart</button>
@@ -88,6 +110,7 @@
         const ctx = canvas.getContext('2d');
         const gameOverMenu = document.getElementById('gameOverMenu');
         const restartButton = document.getElementById('restartButton');
+        const leaderboardElement = document.getElementById('leaderboard');
 
         // Устанавливаем размер канваса на весь экран
         canvas.width = window.innerWidth;
@@ -111,6 +134,22 @@
         let joystickActive = false;
         let joystickX = 0;
         let joystickY = 0;
+        let joystickStartX = 0;
+        let joystickStartY = 0;
+
+        // Список имен для ботов
+        const botNames = [
+            "Bot_Alpha", "Bot_Beta", "Bot_Gamma", "Bot_Delta", "Bot_Epsilon",
+            "Bot_Zeta", "Bot_Eta", "Bot_Theta", "Bot_Iota", "Bot_Kappa",
+            "Bot_Lambda", "Bot_Mu", "Bot_Nu", "Bot_Xi", "Bot_Omicron",
+            "Bot_Pi", "Bot_Rho", "Bot_Sigma", "Bot_Tau", "Bot_Upsilon",
+            "Bot_Phi", "Bot_Chi", "Bot_Psi", "Bot_Omega", "Bot_Ares",
+            "Bot_Zeus", "Bot_Hera", "Bot_Poseidon", "Bot_Athena", "Bot_Apollo",
+            "Bot_Artemis", "Bot_Hermes", "Bot_Dionysus", "Bot_Aphrodite", "Bot_Hades",
+            "Bot_Hephaestus", "Bot_Demeter", "Bot_Hestia", "Bot_Nike", "Bot_Janus",
+            "Bot_Chronos", "Bot_Gaia", "Bot_Uranus", "Bot_Atlas", "Bot_Prometheus",
+            "Bot_Orion", "Bot_Hercules", "Bot_Perseus", "Bot_Theseus", "Bot_Odysseus"
+        ];
 
         // Главный игрок
         const player = {
@@ -120,20 +159,29 @@
             color: '#ff0000',
             speed: 5,
             dx: 0,
-            dy: 0
+            dy: 0,
+            name: "Player",
+            mass: function() {
+                return Math.PI * this.radius * this.radius;
+            }
         };
 
         // Боты
         const bots = [];
         for (let i = 0; i < 50; i++) {
+            const radius = 10 + Math.random() * 20;
             bots.push({
                 x: Math.random() * virtualWidth,
                 y: Math.random() * virtualHeight,
-                radius: 10 + Math.random() * 20,
+                radius: radius,
                 color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
                 speed: 1 + Math.random() * 1,
                 dx: (Math.random() - 0.5) * 2,
-                dy: (Math.random() - 0.5) * 2
+                dy: (Math.random() - 0.5) * 2,
+                name: botNames[i % botNames.length],
+                mass: function() {
+                    return Math.PI * this.radius * this.radius;
+                }
             });
         }
 
@@ -147,6 +195,8 @@
             e.preventDefault();
             joystickActive = true;
             const touch = e.touches[0];
+            joystickStartX = touch.clientX;
+            joystickStartY = touch.clientY;
             joystickBase.style.left = (touch.clientX - 50) + 'px';
             joystickBase.style.top = (touch.clientY - 50) + 'px';
             joystickBase.style.display = 'block';
@@ -156,13 +206,10 @@
         window.addEventListener('touchmove', (e) => {
             e.preventDefault();
             if (!joystickActive) return;
-            const rect = joystickBase.getBoundingClientRect();
             const touch = e.touches[0];
-            const centerX = rect.left + 50;
-            const centerY = rect.top + 50;
-            const deltaX = touch.clientX - centerX;
-            const deltaY = touch.clientY - centerY;
-            const maxDistance = 25;
+            const deltaX = touch.clientX - joystickStartX;
+            const deltaY = touch.clientY - joystickStartY;
+            const maxDistance = 50;
 
             // Нормализация направления
             const distance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), maxDistance);
@@ -175,8 +222,8 @@
             }
 
             // Обновление позиции джойстика
-            joystickThumb.style.left = (joystickX * maxDistance + 25) + 'px';
-            joystickThumb.style.top = (joystickY * maxDistance + 25) + 'px';
+            joystickThumb.style.left = (joystickX * 25 + 25) + 'px';
+            joystickThumb.style.top = (joystickY * 25 + 25) + 'px';
         });
 
         window.addEventListener('touchend', () => {
@@ -185,6 +232,8 @@
             joystickThumb.style.top = '25px';
             joystickX = 0;
             joystickY = 0;
+            joystickBase.style.display = 'none';
+            joystickThumb.style.display = 'none';
         });
 
         // Отрисовка фона в клетку
@@ -234,20 +283,17 @@
             if (keys['ArrowLeft'] || keys['a']) player.dx = -1;
             if (keys['ArrowRight'] || keys['d']) player.dx = 1;
 
-            // Управление с джойстика
+            // Управление с джойстика (исправлено для всех направлений)
             if (joystickActive) {
                 player.dx = joystickX;
                 player.dy = joystickY;
             }
 
             // Нормализация диагонального движения
-            if (player.dx !== 0 && player.dy !== 0) {
+            if (player.dx !== 0 || player.dy !== 0) {
                 const length = Math.sqrt(player.dx * player.dx + player.dy * player.dy);
                 player.dx = (player.dx / length) * player.speed;
                 player.dy = (player.dy / length) * player.speed;
-            } else {
-                player.dx *= player.speed;
-                player.dy *= player.speed;
             }
 
             player.x += player.dx;
@@ -317,14 +363,19 @@
 
         // Респаун бота
         function respawnBot() {
+            const radius = 10 + Math.random() * 10;
             bots.push({
                 x: Math.random() * virtualWidth,
                 y: Math.random() * virtualHeight,
-                radius: 10 + Math.random() * 10,
+                radius: radius,
                 color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
                 speed: 1 + Math.random() * 1,
                 dx: (Math.random() - 0.5) * 2,
-                dy: (Math.random() - 0.5) * 2
+                dy: (Math.random() - 0.5) * 2,
+                name: botNames[Math.floor(Math.random() * botNames.length)],
+                mass: function() {
+                    return Math.PI * this.radius * this.radius;
+                }
             });
         }
 
@@ -349,6 +400,35 @@
             }
         }
 
+        // Обновление таблицы лидеров
+        function updateLeaderboard() {
+            // Создаем массив всех объектов (боты + игрок)
+            const allPlayers = [...bots.map(bot => ({
+                name: bot.name,
+                mass: bot.mass(),
+                isPlayer: false
+            })), {
+                name: player.name,
+                mass: player.mass(),
+                isPlayer: true
+            }];
+            
+            // Сортируем по массе (по убыванию)
+            allPlayers.sort((a, b) => b.mass - a.mass);
+            
+            // Берем топ-10
+            const topPlayers = allPlayers.slice(0, 10);
+            
+            // Очищаем и обновляем таблицу лидеров
+            leaderboardElement.innerHTML = '<h3>Top 10</h3>';
+            topPlayers.forEach((p, index) => {
+                const entry = document.createElement('div');
+                entry.className = 'player-entry' + (p.isPlayer ? ' player' : '');
+                entry.textContent = `${index + 1}. ${p.name}: ${Math.round(p.mass)}`;
+                leaderboardElement.appendChild(entry);
+            });
+        }
+
         // Показать меню поражения
         function showGameOverMenu() {
             gameOverMenu.style.display = 'flex';
@@ -366,14 +446,19 @@
             player.radius = 30;
             bots.length = 0;
             for (let i = 0; i < 50; i++) {
+                const radius = 10 + Math.random() * 20;
                 bots.push({
                     x: Math.random() * virtualWidth,
                     y: Math.random() * virtualHeight,
-                    radius: 10 + Math.random() * 20,
+                    radius: radius,
                     color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
                     speed: 1 + Math.random() * 1,
                     dx: (Math.random() - 0.5) * 2,
-                    dy: (Math.random() - 0.5) * 2
+                    dy: (Math.random() - 0.5) * 2,
+                    name: botNames[i % botNames.length],
+                    mass: function() {
+                        return Math.PI * this.radius * this.radius;
+                    }
                 });
             }
             hideGameOverMenu();
@@ -393,6 +478,12 @@
                 ctx.fillStyle = bot.color;
                 ctx.fill();
                 ctx.closePath();
+                
+                // Отображение имени бота
+                ctx.fillStyle = '#000000';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(bot.name, bot.x - camera.x, bot.y - camera.y + bot.radius + 15);
             });
 
             // Отрисовка игрока
@@ -401,6 +492,12 @@
             ctx.fillStyle = player.color;
             ctx.fill();
             ctx.closePath();
+            
+            // Отображение имени игрока
+            ctx.fillStyle = '#000000';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(player.name, player.x - camera.x, player.y - camera.y + player.radius + 15);
         }
 
         // Кнопка рестарта
@@ -412,6 +509,7 @@
             updateCamera();
             updateBots();
             checkCollisions();
+            updateLeaderboard();
             draw();
             requestAnimationFrame(gameLoop);
         }
