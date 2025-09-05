@@ -14,7 +14,6 @@
         }
         #gameCanvas {
             display: block;
-            background-color: #f0f0f0;
             width: 100vw;
             height: 100vh;
         }
@@ -24,7 +23,7 @@
             left: 20px;
             width: 100px;
             height: 100px;
-            pointer-events: none;
+            pointer-events: auto;
             z-index: 10;
         }
         #joystick-base {
@@ -156,6 +155,30 @@
             player.dy = 0;
         });
 
+        // Отрисовка фона в клетку
+        function drawGrid() {
+            const gridSize = 50;
+            const startX = camera.x % gridSize;
+            const startY = camera.y % gridSize;
+
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+
+            for (let x = startX; x < camera.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, camera.height);
+                ctx.stroke();
+            }
+
+            for (let y = startY; y < camera.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(camera.width, y);
+                ctx.stroke();
+            }
+        }
+
         // Обновление позиции камеры
         function updateCamera() {
             camera.x = player.x - camera.width / 2;
@@ -233,7 +256,10 @@
 
         // Отрисовка
         function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawGrid();
 
             // Отрисовка ботов
             bots.forEach(bot => {
