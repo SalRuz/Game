@@ -11,6 +11,7 @@
             overflow: hidden;
             background-color: #f0f0f0;
             touch-action: none;
+            font-family: Arial, sans-serif;
         }
         #gameCanvas {
             display: block;
@@ -44,6 +45,31 @@
             top: 25px;
             display: none;
         }
+        #gameOverMenu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: white;
+            font-size: 48px;
+            z-index: 20;
+        }
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 24px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -52,18 +78,24 @@
         <div id="joystick-base"></div>
         <div id="joystick-thumb"></div>
     </div>
+    <div id="gameOverMenu">
+        <div>Game Over!</div>
+        <button id="restartButton">Restart</button>
+    </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const gameOverMenu = document.getElementById('gameOverMenu');
+        const restartButton = document.getElementById('restartButton');
 
         // Устанавливаем размер канваса на весь экран
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
         // Виртуальная игровая карта в 5 раз больше экрана
-        const virtualWidth = canvas.width * 5;
-        const virtualHeight = canvas.height * 5;
+        const virtualWidth = canvas.width * 2;
+        const virtualHeight = canvas.height * 2;
 
         // Камера (видимая область)
         const camera = {
@@ -86,7 +118,7 @@
             y: virtualHeight / 2,
             radius: 30,
             color: '#ff0000',
-            speed: 10,
+            speed: 5,
             dx: 0,
             dy: 0
         };
@@ -99,7 +131,9 @@
                 y: Math.random() * virtualHeight,
                 radius: 10 + Math.random() * 20,
                 color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-                speed: 1 + Math.random() * 2
+                speed: 1 + Math.random() * 1,
+                dx: (Math.random() - 0.5) * 2,
+                dy: (Math.random() - 0.5) * 2
             });
         }
 
@@ -133,8 +167,8 @@
             // Нормализация направления
             const distance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), maxDistance);
             if (distance > 0) {
-                joystickX = deltaX / distance;
-                joystickY = deltaY / distance;
+                joystickX = deltaX / maxDistance;
+                joystickY = deltaY / maxDistance;
             } else {
                 joystickX = 0;
                 joystickY = 0;
@@ -151,8 +185,6 @@
             joystickThumb.style.top = '25px';
             joystickX = 0;
             joystickY = 0;
-            player.dx = 0;
-            player.dy = 0;
         });
 
         // Отрисовка фона в клетку
@@ -162,16 +194,16 @@
             const startY = camera.y % gridSize;
 
             ctx.strokeStyle = '#e0e0e0';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 0.5;
 
-            for (let x = startX; x < camera.width; x += gridSize) {
+            for (let x = -startX; x < camera.width; x += gridSize) {
                 ctx.beginPath();
                 ctx.moveTo(x, 0);
                 ctx.lineTo(x, camera.height);
                 ctx.stroke();
             }
 
-            for (let y = startY; y < camera.height; y += gridSize) {
+            for (let y = -startY; y < camera.height; y += gridSize) {
                 ctx.beginPath();
                 ctx.moveTo(0, y);
                 ctx.lineTo(camera.width, y);
@@ -197,15 +229,25 @@
             player.dy = 0;
 
             // Управление с клавиатуры
-            if (keys['ArrowUp'] || keys['w']) player.dy = -player.speed;
-            if (keys['ArrowDown'] || keys['s']) player.dy = player.speed;
-            if (keys['ArrowLeft'] || keys['a']) player.dx = -player.speed;
-            if (keys['ArrowRight'] || keys['d']) player.dx = player.speed;
+            if (keys['ArrowUp'] || keys['w']) player.dy = -1;
+            if (keys['ArrowDown'] || keys['s']) player.dy = 1;
+            if (keys['ArrowLeft'] || keys['a']) player.dx = -1;
+            if (keys['ArrowRight'] || keys['d']) player.dx = 1;
 
             // Управление с джойстика
             if (joystickActive) {
-                player.dx = joystickX * player.speed;
-                player.dy = joystickY * player.speed;
+                player.dx = joystickX;
+                player.dy = joystickY;
+            }
+
+            // Нормализация диагонального движения
+            if (player.dx !== 0 && player.dy !== 0) {
+                const length = Math.sqrt(player.dx * player.dx + player.dy * player.dy);
+                player.dx = (player.dx / length) * player.speed;
+                player.dy = (player.dy / length) * player.speed;
+            } else {
+                player.dx *= player.speed;
+                player.dy *= player.speed;
             }
 
             player.x += player.dx;
@@ -221,19 +263,75 @@
         // Обновление позиции ботов
         function updateBots() {
             bots.forEach(bot => {
-                bot.x += (Math.random() - 0.5) * bot.speed;
-                bot.y += (Math.random() - 0.5) * bot.speed;
+                bot.x += bot.dx;
+                bot.y += bot.dy;
 
-                if (bot.x - bot.radius < 0) bot.x = bot.radius;
-                if (bot.x + bot.radius > virtualWidth) bot.x = virtualWidth - bot.radius;
-                if (bot.y - bot.radius < 0) bot.y = bot.radius;
-                if (bot.y + bot.radius > virtualHeight) bot.y = virtualHeight - bot.radius;
+                // Случайное изменение направления
+                if (Math.random() < 0.02) {
+                    bot.dx = (Math.random() - 0.5) * bot.speed;
+                    bot.dy = (Math.random() - 0.5) * bot.speed;
+                }
+
+                // Ограничение по границам виртуальной карты
+                if (bot.x - bot.radius < 0) {
+                    bot.x = bot.radius;
+                    bot.dx *= -1;
+                }
+                if (bot.x + bot.radius > virtualWidth) {
+                    bot.x = virtualWidth - bot.radius;
+                    bot.dx *= -1;
+                }
+                if (bot.y - bot.radius < 0) {
+                    bot.y = bot.radius;
+                    bot.dy *= -1;
+                }
+                if (bot.y + bot.radius > virtualHeight) {
+                    bot.y = virtualHeight - bot.radius;
+                    bot.dy *= -1;
+                }
+            });
+
+            // Проверка столкновений между ботами
+            for (let i = 0; i < bots.length; i++) {
+                for (let j = i + 1; j < bots.length; j++) {
+                    const bot1 = bots[i];
+                    const bot2 = bots[j];
+                    const dx = bot1.x - bot2.x;
+                    const dy = bot1.y - bot2.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < bot1.radius + bot2.radius) {
+                        if (bot1.radius > bot2.radius) {
+                            bot1.radius += bot2.radius / 4;
+                            bots.splice(j, 1);
+                            respawnBot();
+                        } else {
+                            bot2.radius += bot1.radius / 4;
+                            bots.splice(i, 1);
+                            respawnBot();
+                        }
+                    }
+                }
+            }
+        }
+
+        // Респаун бота
+        function respawnBot() {
+            bots.push({
+                x: Math.random() * virtualWidth,
+                y: Math.random() * virtualHeight,
+                radius: 10 + Math.random() * 10,
+                color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+                speed: 1 + Math.random() * 1,
+                dx: (Math.random() - 0.5) * 2,
+                dy: (Math.random() - 0.5) * 2
             });
         }
 
-        // Проверка столкновений
+        // Проверка столкновений игрока с ботами
         function checkCollisions() {
-            bots.forEach((bot, index) => {
+            for (let i = 0; i < bots.length; i++) {
+                const bot = bots[i];
                 const dx = player.x - bot.x;
                 const dy = player.y - bot.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
@@ -241,17 +339,44 @@
                 if (distance < player.radius + bot.radius) {
                     if (player.radius > bot.radius) {
                         player.radius += bot.radius / 4;
-                        bots.splice(index, 1);
-                        bots.push({
-                            x: Math.random() * virtualWidth,
-                            y: Math.random() * virtualHeight,
-                            radius: 10 + Math.random() * 20,
-                            color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-                            speed: 1 + Math.random() * 2
-                        });
+                        bots.splice(i, 1);
+                        respawnBot();
+                    } else {
+                        showGameOverMenu();
+                        return;
                     }
                 }
-            });
+            }
+        }
+
+        // Показать меню поражения
+        function showGameOverMenu() {
+            gameOverMenu.style.display = 'flex';
+        }
+
+        // Скрыть меню поражения
+        function hideGameOverMenu() {
+            gameOverMenu.style.display = 'none';
+        }
+
+        // Рестарт игры
+        function restartGame() {
+            player.x = virtualWidth / 2;
+            player.y = virtualHeight / 2;
+            player.radius = 30;
+            bots.length = 0;
+            for (let i = 0; i < 50; i++) {
+                bots.push({
+                    x: Math.random() * virtualWidth,
+                    y: Math.random() * virtualHeight,
+                    radius: 10 + Math.random() * 20,
+                    color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+                    speed: 1 + Math.random() * 1,
+                    dx: (Math.random() - 0.5) * 2,
+                    dy: (Math.random() - 0.5) * 2
+                });
+            }
+            hideGameOverMenu();
         }
 
         // Отрисовка
@@ -277,6 +402,9 @@
             ctx.fill();
             ctx.closePath();
         }
+
+        // Кнопка рестарта
+        restartButton.addEventListener('click', restartGame);
 
         // Основной игровой цикл
         function gameLoop() {
