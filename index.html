@@ -205,7 +205,7 @@
             y: virtualHeight / 2,
             radius: Math.sqrt(20 / Math.PI),
             color: '#ff0000',
-            speed: 5, // Уменьшена скорость
+            speed: 5,
             dx: 0,
             dy: 0,
             name: "Player",
@@ -239,7 +239,7 @@
                     y: Math.random() * virtualHeight,
                     radius: Math.sqrt(botScore / Math.PI),
                     color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-                    speed: 3, // Уменьшена скорость
+                    speed: 3,
                     dx: (Math.random() - 0.5) * 2,
                     dy: (Math.random() - 0.5) * 2,
                     name: botNames[i % botNames.length],
@@ -316,7 +316,7 @@
                     ejectedParticles.push({
                         x: centerX,
                         y: centerY,
-                        radius: 4, // Больше обычной еды
+                        radius: Math.sqrt(10 / Math.PI), // Размер для 10 массы
                         color: player.color,
                         dx: normDx * 12, // Скорость вылета
                         dy: normDy * 12,
@@ -387,10 +387,10 @@
                             dx: normDx * 20, // Высокая начальная скорость
                             dy: normDy * 20,
                             score: newScore,
-                            splitVelocity: { // Сохраняем начальную скорость для плавного замедления
+                            splitVelocity: {
                                 x: normDx * 20,
                                 y: normDy * 20,
-                                timer: 30 // Таймер для замедления
+                                timer: 30
                             }
                         };
                         
@@ -459,15 +459,14 @@
         // Обновление позиции камеры (зависит от массы игрока)
         function updateCamera() {
             // Вычисляем зум камеры на основе массы игрока
-            // Маленький зум (больший обзор) при маленькой массе
-            // 4x4 клетки при массе 20, постепенно увеличивается
-            if (player.score <= 20) {
-                camera.zoom = 0.5; // Маленькая масса - большой обзор
-            } else if (player.score > 20 && player.score < 1000) {
-                // Плавное увеличение зума с ростом массы
-                camera.zoom = 0.5 + (player.score - 20) / 2000;
+            // Очень маленький зум (большой обзор) при массе до 100
+            if (player.score <= 100) {
+                camera.zoom = 0.4; // Очень большой обзор при малой массе
             } else {
-                camera.zoom = Math.min(camera.maxZoom, 1 + player.score / 5000);
+                // Плавное увеличение зума с ростом массы после 100
+                // Каждые 100 массы увеличиваем зум на 0.05
+                const additionalZoom = Math.floor((player.score - 100) / 100) * 0.05;
+                camera.zoom = Math.min(camera.maxZoom, 0.4 + additionalZoom);
             }
             
             // Обновляем размер камеры на основе зума
@@ -549,9 +548,30 @@
                         cell.splitVelocity.x *= 0.9;
                         cell.splitVelocity.y *= 0.9;
                     } else {
-                        // Обычное движение к курсору
-                        cell.dx = normDx * speed;
-                        cell.dy = normDy * speed;
+                        // Обычное движение к курсору с тенденцией к объединению
+                        if (player.cells.length > 1) {
+                            // Клетки стремятся к центру масс игрока
+                            const toCenterDx = centerX - cell.x;
+                            const toCenterDy = centerY - cell.y;
+                            const toCenterDist = Math.sqrt(toCenterDx * toCenterDx + toCenterDy * toCenterDy);
+                            
+                            if (toCenterDist > 50) { // Если далеко от центра
+                                // Двигаемся к центру
+                                const normToCenterDx = toCenterDx / toCenterDist;
+                                const normToCenterDy = toCenterDy / toCenterDist;
+                                
+                                cell.dx = normToCenterDx * speed * 0.7 + normDx * speed * 0.3;
+                                cell.dy = normToCenterDy * speed * 0.7 + normDy * speed * 0.3;
+                            } else {
+                                // Обычное движение к курсору
+                                cell.dx = normDx * speed;
+                                cell.dy = normDy * speed;
+                            }
+                        } else {
+                            // Обычное движение к курсору
+                            cell.dx = normDx * speed;
+                            cell.dy = normDy * speed;
+                        }
                         
                         // Удаляем свойство splitVelocity после замедления
                         if (cell.splitVelocity) {
@@ -589,14 +609,9 @@
                 
                 // Удаляем частицу, если она почти остановилась
                 if (Math.abs(particle.dx) < 0.1 && Math.abs(particle.dy) < 0.1) {
-                    // Вместо удаления, превращаем в обычную еду
-                    foodParticles.push({
-                        x: particle.x,
-                        y: particle.y,
-                        radius: 2,
-                        color: particle.color
-                    });
-                    ejectedParticles.splice(i, 1);
+                    // Частица остается как есть (не превращается в обычную еду)
+                    particle.dx = 0;
+                    particle.dy = 0;
                 }
                 
                 // Ограничение по границам виртуальной карты
@@ -775,7 +790,8 @@
                     const dy = cell.y - particle.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     
-                    if (distance < cell.radius + particle.radius && cell.score > 10) {
+                    // Съесть можно только если масса клетки больше массы частицы
+                    if (distance < cell.radius + particle.radius && cell.score > particle.score) {
                         cell.score += particle.score;
                         player.score += particle.score;
                         cell.radius = Math.sqrt(cell.score / Math.PI);
@@ -795,7 +811,8 @@
                             const dy = cell.y - particle.y;
                             const distance = Math.sqrt(dx * dx + dy * dy);
                             
-                            if (distance < cell.radius + particle.radius && cell.score > 10) {
+                            // Съесть можно только если масса клетки больше массы частицы
+                            if (distance < cell.radius + particle.radius && cell.score > particle.score) {
                                 cell.score += particle.score;
                                 bot.score += particle.score;
                                 cell.radius = Math.sqrt(cell.score / Math.PI);
@@ -905,6 +922,9 @@
                                 botCell.score += playerCell.score;
                                 bot.score += playerCell.score;
                                 botCell.radius = Math.sqrt(botCell.score / Math.PI);
+                                
+                                // Игрок теряет массу съеденной клетки
+                                player.score -= playerCell.score;
                                 player.cells.splice(k, 1);
                                 
                                 // Если у игрока не осталось клеток, респавним его
