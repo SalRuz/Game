@@ -13,6 +13,7 @@
         }
         canvas {
             display: block;
+            background-color: #f0f0f0;
         }
         #joystick {
             position: fixed;
@@ -20,7 +21,7 @@
             left: 20px;
             width: 100px;
             height: 100px;
-            pointer-events: auto;
+            pointer-events: none;
         }
         #joystick-base {
             position: absolute;
@@ -52,8 +53,16 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+
+        // Увеличиваем размер карты в 5 раз
+        canvas.width = window.innerWidth * 5;
+        canvas.height = window.innerHeight * 5;
+
+        // Масштабирование для отображения на экране
+        const scale = 1 / 5;
+        canvas.style.width = (window.innerWidth) + 'px';
+        canvas.style.height = (window.innerHeight) + 'px';
+        ctx.scale(scale, scale);
 
         // Джойстик
         const joystickBase = document.getElementById('joystick-base');
@@ -68,14 +77,14 @@
             y: canvas.height / 2,
             radius: 30,
             color: '#ff0000',
-            speed: 5,
+            speed: 10,
             dx: 0,
             dy: 0
         };
 
         // Боты
         const bots = [];
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 50; i++) {
             bots.push({
                 x: Math.random() * canvas.width,
                 y: Math.random() * canvas.height,
@@ -94,12 +103,11 @@
         joystickBase.parentElement.addEventListener('touchstart', (e) => {
             e.preventDefault();
             joystickActive = true;
-            const rect = joystickBase.getBoundingClientRect();
-            joystickBase.style.display = 'block';
-            joystickThumb.style.display = 'block';
             const touch = e.touches[0];
             joystickBase.style.left = (touch.clientX - 50) + 'px';
             joystickBase.style.top = (touch.clientY - 50) + 'px';
+            joystickBase.style.display = 'block';
+            joystickThumb.style.display = 'block';
         });
 
         window.addEventListener('touchmove', (e) => {
@@ -111,20 +119,21 @@
             const centerY = rect.top + 50;
             const deltaX = touch.clientX - centerX;
             const deltaY = touch.clientY - centerY;
-            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
             const maxDistance = 25;
 
-            if (distance < maxDistance) {
-                joystickThumb.style.left = (deltaX + 25) + 'px';
-                joystickThumb.style.top = (deltaY + 25) + 'px';
+            // Нормализация направления
+            const distance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), maxDistance);
+            if (distance > 0) {
+                joystickX = deltaX / distance;
+                joystickY = deltaY / distance;
             } else {
-                const angle = Math.atan2(deltaY, deltaX);
-                joystickThumb.style.left = (Math.cos(angle) * maxDistance + 25) + 'px';
-                joystickThumb.style.top = (Math.sin(angle) * maxDistance + 25) + 'px';
+                joystickX = 0;
+                joystickY = 0;
             }
 
-            joystickX = deltaX / maxDistance;
-            joystickY = deltaY / maxDistance;
+            // Обновление позиции джойстика
+            joystickThumb.style.left = (joystickX * maxDistance + 25) + 'px';
+            joystickThumb.style.top = (joystickY * maxDistance + 25) + 'px';
         });
 
         window.addEventListener('touchend', () => {
@@ -139,6 +148,10 @@
 
         // Обновление позиции игрока
         function updatePlayer() {
+            player.dx = 0;
+            player.dy = 0;
+
+            // Управление с клавиатуры
             if (keys['ArrowUp'] || keys['w']) player.dy = -player.speed;
             if (keys['ArrowDown'] || keys['s']) player.dy = player.speed;
             if (keys['ArrowLeft'] || keys['a']) player.dx = -player.speed;
@@ -153,7 +166,7 @@
             player.x += player.dx;
             player.y += player.dy;
 
-            // Ограничение по границам экрана
+            // Ограничение по границам карты
             if (player.x - player.radius < 0) player.x = player.radius;
             if (player.x + player.radius > canvas.width) player.x = canvas.width - player.radius;
             if (player.y - player.radius < 0) player.y = player.radius;
