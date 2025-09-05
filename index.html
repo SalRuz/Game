@@ -1,20 +1,22 @@
-.
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Agar.io Clone</title>
     <style>
         body {
             margin: 0;
+            padding: 0;
             overflow: hidden;
             background-color: #f0f0f0;
             touch-action: none;
         }
-        canvas {
+        #gameCanvas {
             display: block;
             background-color: #f0f0f0;
+            width: 100vw;
+            height: 100vh;
         }
         #joystick {
             position: fixed;
@@ -23,6 +25,7 @@
             width: 100px;
             height: 100px;
             pointer-events: none;
+            z-index: 10;
         }
         #joystick-base {
             position: absolute;
@@ -55,15 +58,21 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Увеличиваем размер карты в 5 раз
-        canvas.width = window.innerWidth * 5;
-        canvas.height = window.innerHeight * 5;
+        // Устанавливаем размер канваса на весь экран
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-        // Масштабирование для отображения на экране
-        const scale = 1 / 5;
-        canvas.style.width = (window.innerWidth) + 'px';
-        canvas.style.height = (window.innerHeight) + 'px';
-        ctx.scale(scale, scale);
+        // Виртуальная игровая карта в 5 раз больше экрана
+        const virtualWidth = canvas.width * 5;
+        const virtualHeight = canvas.height * 5;
+
+        // Камера (видимая область)
+        const camera = {
+            x: 0,
+            y: 0,
+            width: canvas.width,
+            height: canvas.height
+        };
 
         // Джойстик
         const joystickBase = document.getElementById('joystick-base');
@@ -74,8 +83,8 @@
 
         // Главный игрок
         const player = {
-            x: canvas.width / 2,
-            y: canvas.height / 2,
+            x: virtualWidth / 2,
+            y: virtualHeight / 2,
             radius: 30,
             color: '#ff0000',
             speed: 10,
@@ -87,8 +96,8 @@
         const bots = [];
         for (let i = 0; i < 50; i++) {
             bots.push({
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height,
+                x: Math.random() * virtualWidth,
+                y: Math.random() * virtualHeight,
                 radius: 10 + Math.random() * 20,
                 color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
                 speed: 1 + Math.random() * 2
@@ -147,6 +156,18 @@
             player.dy = 0;
         });
 
+        // Обновление позиции камеры
+        function updateCamera() {
+            camera.x = player.x - camera.width / 2;
+            camera.y = player.y - camera.height / 2;
+
+            // Ограничение по границам виртуальной карты
+            if (camera.x < 0) camera.x = 0;
+            if (camera.y < 0) camera.y = 0;
+            if (camera.x + camera.width > virtualWidth) camera.x = virtualWidth - camera.width;
+            if (camera.y + camera.height > virtualHeight) camera.y = virtualHeight - camera.height;
+        }
+
         // Обновление позиции игрока
         function updatePlayer() {
             player.dx = 0;
@@ -167,11 +188,11 @@
             player.x += player.dx;
             player.y += player.dy;
 
-            // Ограничение по границам карты
+            // Ограничение по границам виртуальной карты
             if (player.x - player.radius < 0) player.x = player.radius;
-            if (player.x + player.radius > canvas.width) player.x = canvas.width - player.radius;
+            if (player.x + player.radius > virtualWidth) player.x = virtualWidth - player.radius;
             if (player.y - player.radius < 0) player.y = player.radius;
-            if (player.y + player.radius > canvas.height) player.y = canvas.height - player.radius;
+            if (player.y + player.radius > virtualHeight) player.y = virtualHeight - player.radius;
         }
 
         // Обновление позиции ботов
@@ -181,9 +202,9 @@
                 bot.y += (Math.random() - 0.5) * bot.speed;
 
                 if (bot.x - bot.radius < 0) bot.x = bot.radius;
-                if (bot.x + bot.radius > canvas.width) bot.x = canvas.width - bot.radius;
+                if (bot.x + bot.radius > virtualWidth) bot.x = virtualWidth - bot.radius;
                 if (bot.y - bot.radius < 0) bot.y = bot.radius;
-                if (bot.y + bot.radius > canvas.height) bot.y = canvas.height - bot.radius;
+                if (bot.y + bot.radius > virtualHeight) bot.y = virtualHeight - bot.radius;
             });
         }
 
@@ -199,8 +220,8 @@
                         player.radius += bot.radius / 4;
                         bots.splice(index, 1);
                         bots.push({
-                            x: Math.random() * canvas.width,
-                            y: Math.random() * canvas.height,
+                            x: Math.random() * virtualWidth,
+                            y: Math.random() * virtualHeight,
                             radius: 10 + Math.random() * 20,
                             color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
                             speed: 1 + Math.random() * 2
@@ -214,16 +235,18 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Отрисовка ботов
             bots.forEach(bot => {
                 ctx.beginPath();
-                ctx.arc(bot.x, bot.y, bot.radius, 0, Math.PI * 2);
+                ctx.arc(bot.x - camera.x, bot.y - camera.y, bot.radius, 0, Math.PI * 2);
                 ctx.fillStyle = bot.color;
                 ctx.fill();
                 ctx.closePath();
             });
 
+            // Отрисовка игрока
             ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
             ctx.fillStyle = player.color;
             ctx.fill();
             ctx.closePath();
@@ -232,6 +255,7 @@
         // Основной игровой цикл
         function gameLoop() {
             updatePlayer();
+            updateCamera();
             updateBots();
             checkCollisions();
             draw();
