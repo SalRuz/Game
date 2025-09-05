@@ -2,28 +2,65 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Agar.io Clone</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
             background-color: #f0f0f0;
+            touch-action: none;
         }
         canvas {
             display: block;
+        }
+        #joystick {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 100px;
+            height: 100px;
+            pointer-events: auto;
+        }
+        #joystick-base {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            background: rgba(200, 200, 200, 0.5);
+            border-radius: 50%;
+            display: none;
+        }
+        #joystick-thumb {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: rgba(100, 100, 100, 0.7);
+            border-radius: 50%;
+            left: 25px;
+            top: 25px;
+            display: none;
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
+    <div id="joystick">
+        <div id="joystick-base"></div>
+        <div id="joystick-thumb"></div>
+    </div>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-
-        // Устанавливаем размер канваса на весь экран
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+
+        // Джойстик
+        const joystickBase = document.getElementById('joystick-base');
+        const joystickThumb = document.getElementById('joystick-thumb');
+        let joystickActive = false;
+        let joystickX = 0;
+        let joystickY = 0;
 
         // Главный игрок
         const player = {
@@ -48,19 +85,70 @@
             });
         }
 
-        // Управление клавиатурой
+        // Управление с клавиатуры
         const keys = {};
         window.addEventListener('keydown', (e) => keys[e.key] = true);
         window.addEventListener('keyup', (e) => keys[e.key] = false);
 
-        // Обновление позиции игрока
-        function updatePlayer() {
+        // Управление джойстиком
+        joystickBase.parentElement.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            joystickActive = true;
+            const rect = joystickBase.getBoundingClientRect();
+            joystickBase.style.display = 'block';
+            joystickThumb.style.display = 'block';
+            const touch = e.touches[0];
+            joystickBase.style.left = (touch.clientX - 50) + 'px';
+            joystickBase.style.top = (touch.clientY - 50) + 'px';
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!joystickActive) return;
+            const rect = joystickBase.getBoundingClientRect();
+            const touch = e.touches[0];
+            const centerX = rect.left + 50;
+            const centerY = rect.top + 50;
+            const deltaX = touch.clientX - centerX;
+            const deltaY = touch.clientY - centerY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDistance = 25;
+
+            if (distance < maxDistance) {
+                joystickThumb.style.left = (deltaX + 25) + 'px';
+                joystickThumb.style.top = (deltaY + 25) + 'px';
+            } else {
+                const angle = Math.atan2(deltaY, deltaX);
+                joystickThumb.style.left = (Math.cos(angle) * maxDistance + 25) + 'px';
+                joystickThumb.style.top = (Math.sin(angle) * maxDistance + 25) + 'px';
+            }
+
+            joystickX = deltaX / maxDistance;
+            joystickY = deltaY / maxDistance;
+        });
+
+        window.addEventListener('touchend', () => {
+            joystickActive = false;
+            joystickThumb.style.left = '25px';
+            joystickThumb.style.top = '25px';
+            joystickX = 0;
+            joystickY = 0;
             player.dx = 0;
             player.dy = 0;
+        });
+
+        // Обновление позиции игрока
+        function updatePlayer() {
             if (keys['ArrowUp'] || keys['w']) player.dy = -player.speed;
             if (keys['ArrowDown'] || keys['s']) player.dy = player.speed;
             if (keys['ArrowLeft'] || keys['a']) player.dx = -player.speed;
             if (keys['ArrowRight'] || keys['d']) player.dx = player.speed;
+
+            // Управление с джойстика
+            if (joystickActive) {
+                player.dx = joystickX * player.speed;
+                player.dy = joystickY * player.speed;
+            }
 
             player.x += player.dx;
             player.y += player.dy;
@@ -72,13 +160,12 @@
             if (player.y + player.radius > canvas.height) player.y = canvas.height - player.radius;
         }
 
-        // Обновление позиции ботов (простое случайное движение)
+        // Обновление позиции ботов
         function updateBots() {
             bots.forEach(bot => {
                 bot.x += (Math.random() - 0.5) * bot.speed;
                 bot.y += (Math.random() - 0.5) * bot.speed;
 
-                // Ограничение по границам экрана
                 if (bot.x - bot.radius < 0) bot.x = bot.radius;
                 if (bot.x + bot.radius > canvas.width) bot.x = canvas.width - bot.radius;
                 if (bot.y - bot.radius < 0) bot.y = bot.radius;
@@ -97,7 +184,6 @@
                     if (player.radius > bot.radius) {
                         player.radius += bot.radius / 4;
                         bots.splice(index, 1);
-                        // Добавляем нового бота
                         bots.push({
                             x: Math.random() * canvas.width,
                             y: Math.random() * canvas.height,
@@ -114,7 +200,6 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Отрисовка ботов
             bots.forEach(bot => {
                 ctx.beginPath();
                 ctx.arc(bot.x, bot.y, bot.radius, 0, Math.PI * 2);
@@ -123,7 +208,6 @@
                 ctx.closePath();
             });
 
-            // Отрисовка игрока
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
             ctx.fillStyle = player.color;
