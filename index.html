@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Agar.io Clone</title>
     <style>
         body {
@@ -17,33 +17,32 @@
             display: block;
             width: 100vw;
             height: 100vh;
-            transform: rotate(0deg);
         }
         #joystick {
             position: fixed;
             bottom: 20px;
             left: 20px;
-            width: 80px;
-            height: 80px;
+            width: 100px;
+            height: 100px;
             pointer-events: auto;
             z-index: 10;
         }
         #joystick-base {
             position: absolute;
-            width: 80px;
-            height: 80px;
+            width: 100px;
+            height: 100px;
             background: rgba(200, 200, 200, 0.5);
             border-radius: 50%;
             display: none;
         }
         #joystick-thumb {
             position: absolute;
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             background: rgba(100, 100, 100, 0.7);
             border-radius: 50%;
-            left: 20px;
-            top: 20px;
+            left: 25px;
+            top: 25px;
             display: none;
         }
         #gameOverMenu {
@@ -58,13 +57,13 @@
             align-items: center;
             flex-direction: column;
             color: white;
-            font-size: 36px;
+            font-size: 48px;
             z-index: 20;
         }
         #restartButton {
             margin-top: 20px;
             padding: 10px 20px;
-            font-size: 20px;
+            font-size: 24px;
             background-color: #4CAF50;
             color: white;
             border: none;
@@ -75,18 +74,15 @@
             position: fixed;
             top: 10px;
             right: 10px;
-            background: rgba(255, 255, 255, 0.7);
+            background: rgba(255, 255, 255, 0.8);
             padding: 8px;
             border-radius: 5px;
             min-width: 120px;
             font-size: 12px;
             z-index: 15;
-            max-height: 120px;
-            overflow-y: auto;
         }
         .player-entry {
             margin: 3px 0;
-            font-size: 11px;
         }
         .player-entry.player {
             color: red;
@@ -95,9 +91,34 @@
             border: 1px solid rgba(255, 0, 0, 0.5);
             border-radius: 2px;
         }
+        @media (orientation: portrait) {
+            #orientation-message {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.8);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                color: white;
+                font-size: 24px;
+                z-index: 100;
+                text-align: center;
+            }
+        }
+        @media (orientation: landscape) {
+            #orientation-message {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
+    <div id="orientation-message">
+        Пожалуйста, поверните устройство в горизонтальное положение для игры
+    </div>
     <canvas id="gameCanvas"></canvas>
     <div id="joystick">
         <div id="joystick-base"></div>
@@ -112,271 +133,517 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const leaderboard = document.getElementById('leaderboard');
         const gameOverMenu = document.getElementById('gameOverMenu');
         const restartButton = document.getElementById('restartButton');
-        const joystickBase = document.getElementById('joystick-base');
-        const joystickThumb = document.getElementById('joystick-thumb');
+        const leaderboardElement = document.getElementById('leaderboard');
 
-        // Настройки игры
-        const settings = {
-            playerStartSize: 5,
-            foodSize: 1,
-            botCount: 10,
-            mapScale: 5,
-            foodCount: 200,
-        };
+        // Устанавливаем размер канваса на весь экран
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-        // Игрок
-        let player = {
+        // Виртуальная игровая карта в 5 раз больше (увеличили в 5 раз)
+        const virtualWidth = canvas.width * 5;
+        const virtualHeight = canvas.height * 5;
+
+        // Камера (видимая область)
+        const camera = {
             x: 0,
             y: 0,
-            size: settings.playerStartSize,
-            color: getRandomColor(),
-            speed: 5,
-            direction: { x: 0, y: 0 },
+            width: canvas.width,
+            height: canvas.height
         };
 
-        // Еда
-        let foods = [];
-        // Боты
-        let bots = [];
-        // Топ игроков
-        let topPlayers = [];
+        // Джойстик
+        const joystickBase = document.getElementById('joystick-base');
+        const joystickThumb = document.getElementById('joystick-thumb');
+        let joystickActive = false;
+        let joystickX = 0;
+        let joystickY = 0;
+        let joystickStartX = 0;
+        let joystickStartY = 0;
 
-        // Инициализация
-        function init() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+        // Список имен для ботов
+        const botNames = [
+            "Bot_Alpha", "Bot_Beta", "Bot_Gamma", "Bot_Delta", "Bot_Epsilon",
+            "Bot_Zeta", "Bot_Eta", "Bot_Theta", "Bot_Iota", "Bot_Kappa",
+            "Bot_Lambda", "Bot_Mu", "Bot_Nu", "Bot_Xi", "Bot_Omicron",
+            "Bot_Pi", "Bot_Rho", "Bot_Sigma", "Bot_Tau", "Bot_Upsilon",
+            "Bot_Phi", "Bot_Chi", "Bot_Psi", "Bot_Omega", "Bot_Ares",
+            "Bot_Zeus", "Bot_Hera", "Bot_Poseidon", "Bot_Athena", "Bot_Apollo",
+            "Bot_Artemis", "Bot_Hermes", "Bot_Dionysus", "Bot_Aphrodite", "Bot_Hades",
+            "Bot_Hephaestus", "Bot_Demeter", "Bot_Hestia", "Bot_Nike", "Bot_Janus",
+            "Bot_Chronos", "Bot_Gaia", "Bot_Uranus", "Bot_Atlas", "Bot_Prometheus",
+            "Bot_Orion", "Bot_Hercules", "Bot_Perseus", "Bot_Theseus", "Bot_Odysseus"
+        ];
 
-            player.x = canvas.width / 2;
-            player.y = canvas.height / 2;
+        // Мелкие частицы еды
+        const foodParticles = [];
+        const FOOD_COUNT = 500; // Количество частиц еды
 
-            foods = [];
-            for (let i = 0; i < settings.foodCount; i++) {
-                foods.push({
-                    x: Math.random() * canvas.width * settings.mapScale,
-                    y: Math.random() * canvas.height * settings.mapScale,
-                    size: settings.foodSize,
-                    color: '#66ff33',
+        // Инициализация частиц еды
+        function initFood() {
+            for (let i = 0; i < FOOD_COUNT; i++) {
+                foodParticles.push({
+                    x: Math.random() * virtualWidth,
+                    y: Math.random() * virtualHeight,
+                    radius: 2,
+                    color: getRandomFoodColor()
                 });
             }
+        }
 
-            bots = [];
-            for (let i = 0; i < settings.botCount; i++) {
+        // Случайный цвет для еды
+        function getRandomFoodColor() {
+            const colors = [
+                '#FF5252', '#FF4081', '#E040FB', '#7C4DFF', '#536DFE',
+                '#448AFF', '#40C4FF', '#18FFFF', '#64FFDA', '#69F0AE',
+                '#B2FF59', '#EEFF41', '#FFFF00', '#FFD740', '#FFAB40', '#FF6E40'
+            ];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        // Главный игрок (начальный размер 5 поинтов)
+        const player = {
+            x: virtualWidth / 2,
+            y: virtualHeight / 2,
+            radius: 5, // Начальный размер 5 поинтов
+            color: '#ff0000',
+            speed: 5,
+            dx: 0,
+            dy: 0,
+            name: "Player",
+            mass: function() {
+                return Math.PI * this.radius * this.radius;
+            },
+            score: 5 // Начальный счет 5
+        };
+
+        // Боты (начальный размер 5 поинтов)
+        const bots = [];
+        const BOT_COUNT = 50; // Количество ботов оставлено прежним
+
+        // Инициализация ботов
+        function initBots() {
+            for (let i = 0; i < BOT_COUNT; i++) {
                 bots.push({
-                    x: Math.random() * canvas.width * settings.mapScale,
-                    y: Math.random() * canvas.height * settings.mapScale,
-                    size: settings.playerStartSize,
-                    color: getRandomColor(),
-                    speed: 2 + Math.random() * 2,
-                    direction: { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 },
+                    x: Math.random() * virtualWidth,
+                    y: Math.random() * virtualHeight,
+                    radius: 5, // Начальный размер 5 поинтов
+                    color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+                    speed: 1 + Math.random() * 1,
+                    dx: (Math.random() - 0.5) * 2,
+                    dy: (Math.random() - 0.5) * 2,
+                    name: botNames[i % botNames.length],
+                    mass: function() {
+                        return Math.PI * this.radius * this.radius;
+                    },
+                    score: 5 // Начальный счет 5
                 });
             }
-
-            gameOverMenu.style.display = 'none';
-            gameLoop();
         }
 
-        // Основной цикл игры
-        function gameLoop() {
-            update();
-            render();
-            requestAnimationFrame(gameLoop);
+        // Управление с клавиатуры
+        const keys = {};
+        window.addEventListener('keydown', (e) => keys[e.key] = true);
+        window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        // Управление джойстиком
+        joystickBase.parentElement.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            joystickActive = true;
+            const touch = e.touches[0];
+            joystickStartX = touch.clientX;
+            joystickStartY = touch.clientY;
+            joystickBase.style.left = (touch.clientX - 50) + 'px';
+            joystickBase.style.top = (touch.clientY - 50) + 'px';
+            joystickBase.style.display = 'block';
+            joystickThumb.style.display = 'block';
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!joystickActive) return;
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - joystickStartX;
+            const deltaY = touch.clientY - joystickStartY;
+            const maxDistance = 50;
+
+            // Нормализация направления
+            const distance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), maxDistance);
+            if (distance > 0) {
+                joystickX = deltaX / maxDistance;
+                joystickY = deltaY / maxDistance;
+            } else {
+                joystickX = 0;
+                joystickY = 0;
+            }
+
+            // Обновление позиции джойстика
+            joystickThumb.style.left = (joystickX * 25 + 25) + 'px';
+            joystickThumb.style.top = (joystickY * 25 + 25) + 'px';
+        });
+
+        window.addEventListener('touchend', () => {
+            joystickActive = false;
+            joystickThumb.style.left = '25px';
+            joystickThumb.style.top = '25px';
+            joystickX = 0;
+            joystickY = 0;
+            joystickBase.style.display = 'none';
+            joystickThumb.style.display = 'none';
+        });
+
+        // Отрисовка фона в клетку
+        function drawGrid() {
+            const gridSize = 50;
+            const startX = camera.x % gridSize;
+            const startY = camera.y % gridSize;
+
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 0.5;
+
+            for (let x = -startX; x < camera.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, camera.height);
+                ctx.stroke();
+            }
+
+            for (let y = -startY; y < camera.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(camera.width, y);
+                ctx.stroke();
+            }
         }
 
-        // Обновление состояния
-        function update() {
-            // Движение игрока
-            const speed = player.speed / player.size;
-            player.x += player.direction.x * speed;
-            player.y += player.direction.y * speed;
+        // Обновление позиции камеры
+        function updateCamera() {
+            camera.x = player.x - camera.width / 2;
+            camera.y = player.y - camera.height / 2;
 
-            // Проверка границ
-            if (player.x < 0) player.x = 0;
-            if (player.x > canvas.width * settings.mapScale) player.x = canvas.width * settings.mapScale;
-            if (player.y < 0) player.y = 0;
-            if (player.y > canvas.height * settings.mapScale) player.y = canvas.height * settings.mapScale;
+            // Ограничение по границам виртуальной карты
+            if (camera.x < 0) camera.x = 0;
+            if (camera.y < 0) camera.y = 0;
+            if (camera.x + camera.width > virtualWidth) camera.x = virtualWidth - camera.width;
+            if (camera.y + camera.height > virtualHeight) camera.y = virtualHeight - camera.height;
+        }
 
-            // Движение ботов
+        // Обновление позиции игрока
+        function updatePlayer() {
+            player.dx = 0;
+            player.dy = 0;
+
+            // Управление с клавиатуры
+            if (keys['ArrowUp'] || keys['w']) player.dy = -1;
+            if (keys['ArrowDown'] || keys['s']) player.dy = 1;
+            if (keys['ArrowLeft'] || keys['a']) player.dx = -1;
+            if (keys['ArrowRight'] || keys['d']) player.dx = 1;
+
+            // Управление с джойстика
+            if (joystickActive) {
+                player.dx = joystickX;
+                player.dy = joystickY;
+            }
+
+            // Нормализация диагонального движения
+            if (player.dx !== 0 || player.dy !== 0) {
+                const length = Math.sqrt(player.dx * player.dx + player.dy * player.dy);
+                player.dx = (player.dx / length) * player.speed;
+                player.dy = (player.dy / length) * player.speed;
+            }
+
+            player.x += player.dx;
+            player.y += player.dy;
+
+            // Ограничение по границам виртуальной карты
+            if (player.x - player.radius < 0) player.x = player.radius;
+            if (player.x + player.radius > virtualWidth) player.x = virtualWidth - player.radius;
+            if (player.y - player.radius < 0) player.y = player.radius;
+            if (player.y + player.radius > virtualHeight) player.y = virtualHeight - player.radius;
+        }
+
+        // Обновление позиции ботов
+        function updateBots() {
             bots.forEach(bot => {
-                bot.x += bot.direction.x * (bot.speed / bot.size);
-                bot.y += bot.direction.y * (bot.speed / bot.size);
+                bot.x += bot.dx;
+                bot.y += bot.dy;
 
-                if (bot.x < 0 || bot.x > canvas.width * settings.mapScale) bot.direction.x *= -1;
-                if (bot.y < 0 || bot.y > canvas.height * settings.mapScale) bot.direction.y *= -1;
+                // Случайное изменение направления
+                if (Math.random() < 0.02) {
+                    bot.dx = (Math.random() - 0.5) * bot.speed;
+                    bot.dy = (Math.random() - 0.5) * bot.speed;
+                }
+
+                // Ограничение по границам виртуальной карты
+                if (bot.x - bot.radius < 0) {
+                    bot.x = bot.radius;
+                    bot.dx *= -1;
+                }
+                if (bot.x + bot.radius > virtualWidth) {
+                    bot.x = virtualWidth - bot.radius;
+                    bot.dx *= -1;
+                }
+                if (bot.y - bot.radius < 0) {
+                    bot.y = bot.radius;
+                    bot.dy *= -1;
+                }
+                if (bot.y + bot.radius > virtualHeight) {
+                    bot.y = virtualHeight - bot.radius;
+                    bot.dy *= -1;
+                }
             });
 
-            // Проверка столкновений с едой
-            foods = foods.filter(food => {
+            // Проверка столкновений между ботами
+            for (let i = 0; i < bots.length; i++) {
+                for (let j = i + 1; j < bots.length; j++) {
+                    const bot1 = bots[i];
+                    const bot2 = bots[j];
+                    const dx = bot1.x - bot2.x;
+                    const dy = bot1.y - bot2.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < bot1.radius + bot2.radius) {
+                        if (bot1.score > bot2.score) {
+                            // Бот1 съедает бота2
+                            bot1.score += bot2.score;
+                            bot1.radius = Math.sqrt(bot1.score / Math.PI);
+                            bots.splice(j, 1);
+                            respawnBot();
+                        } else if (bot2.score > bot1.score) {
+                            // Бот2 съедает бота1
+                            bot2.score += bot1.score;
+                            bot2.radius = Math.sqrt(bot2.score / Math.PI);
+                            bots.splice(i, 1);
+                            respawnBot();
+                        }
+                    }
+                }
+            }
+        }
+
+        // Проверка сбора еды
+        function checkFoodCollection() {
+            // Проверка для игрока
+            for (let i = foodParticles.length - 1; i >= 0; i--) {
+                const food = foodParticles[i];
                 const dx = player.x - food.x;
                 const dy = player.y - food.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance < player.size) {
-                    player.size += food.size;
-                    return false;
+                
+                if (distance < player.radius + food.radius) {
+                    player.score += 1;
+                    player.radius = Math.sqrt(player.score / Math.PI);
+                    foodParticles.splice(i, 1);
+                    spawnFood(1); // Добавляем новую еду
                 }
-                return true;
-            });
-
-            // Проверка столкновений с ботами
-            bots = bots.filter(bot => {
-                const dx = player.x - bot.x;
-                const dy = player.y - bot.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance < player.size && player.size > bot.size) {
-                    player.size += bot.size;
-                    return false;
-                }
-                return true;
-            });
-
-            // Проверка столкновений ботов с едой
-            foods = foods.filter(food => {
-                let eaten = false;
-                bots.forEach(bot => {
+            }
+            
+            // Проверка для ботов
+            bots.forEach(bot => {
+                for (let i = foodParticles.length - 1; i >= 0; i--) {
+                    const food = foodParticles[i];
                     const dx = bot.x - food.x;
                     const dy = bot.y - food.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance < bot.size) {
-                        bot.size += food.size;
-                        eaten = true;
+                    
+                    if (distance < bot.radius + food.radius) {
+                        bot.score += 1;
+                        bot.radius = Math.sqrt(bot.score / Math.PI);
+                        foodParticles.splice(i, 1);
+                        spawnFood(1); // Добавляем новую еду
                     }
-                });
-                return !eaten;
+                }
             });
+        }
 
-            // Проверка столкновений ботов между собой
-            bots = bots.filter(bot => {
-                let eaten = false;
-                bots.forEach(otherBot => {
-                    if (bot === otherBot) return;
-                    const dx = bot.x - otherBot.x;
-                    const dy = bot.y - otherBot.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance < otherBot.size && otherBot.size > bot.size) {
-                        otherBot.size += bot.size;
-                        eaten = true;
+        // Добавление новой еды
+        function spawnFood(count) {
+            for (let i = 0; i < count; i++) {
+                foodParticles.push({
+                    x: Math.random() * virtualWidth,
+                    y: Math.random() * virtualHeight,
+                    radius: 2,
+                    color: getRandomFoodColor()
+                });
+            }
+        }
+
+        // Респаун бота
+        function respawnBot() {
+            bots.push({
+                x: Math.random() * virtualWidth,
+                y: Math.random() * virtualHeight,
+                radius: 5, // Начальный размер 5 поинтов
+                color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+                speed: 1 + Math.random() * 1,
+                dx: (Math.random() - 0.5) * 2,
+                dy: (Math.random() - 0.5) * 2,
+                name: botNames[Math.floor(Math.random() * botNames.length)],
+                mass: function() {
+                    return Math.PI * this.radius * this.radius;
+                },
+                score: 5 // Начальный счет 5
+            });
+        }
+
+        // Проверка столкновений игрока с ботами
+        function checkCollisions() {
+            for (let i = 0; i < bots.length; i++) {
+                const bot = bots[i];
+                const dx = player.x - bot.x;
+                const dy = player.y - bot.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < player.radius + bot.radius) {
+                    if (player.score > bot.score) {
+                        // Игрок съедает бота
+                        player.score += bot.score;
+                        player.radius = Math.sqrt(player.score / Math.PI);
+                        bots.splice(i, 1);
+                        respawnBot();
+                    } else {
+                        // Бот съедает игрока
+                        showGameOverMenu();
+                        return;
                     }
-                });
-                return !eaten;
-            });
+                }
+            }
+        }
 
-            // Обновление топ-листа
-            updateLeaderboard();
+        // Обновление таблицы лидеров
+        function updateLeaderboard() {
+            // Создаем массив всех объектов (боты + игрок)
+            const allPlayers = [...bots.map(bot => ({
+                name: bot.name,
+                score: Math.round(bot.score),
+                isPlayer: false
+            })), {
+                name: player.name,
+                score: Math.round(player.score),
+                isPlayer: true
+            }];
+            
+            // Сортируем по очкам (по убыванию)
+            allPlayers.sort((a, b) => b.score - a.score);
+            
+            // Берем топ-10
+            const topPlayers = allPlayers.slice(0, 10);
+            
+            // Очищаем и обновляем таблицу лидеров
+            leaderboardElement.innerHTML = '<h3>Top 10</h3>';
+            topPlayers.forEach((p, index) => {
+                const entry = document.createElement('div');
+                entry.className = 'player-entry' + (p.isPlayer ? ' player' : '');
+                entry.textContent = `${index + 1}. ${p.name}: ${p.score}`;
+                leaderboardElement.appendChild(entry);
+            });
+        }
+
+        // Показать меню поражения
+        function showGameOverMenu() {
+            gameOverMenu.style.display = 'flex';
+        }
+
+        // Скрыть меню поражения
+        function hideGameOverMenu() {
+            gameOverMenu.style.display = 'none';
+        }
+
+        // Рестарт игры
+        function restartGame() {
+            player.x = virtualWidth / 2;
+            player.y = virtualHeight / 2;
+            player.radius = 5;
+            player.score = 5;
+            
+            // Очищаем ботов и создаем заново
+            bots.length = 0;
+            initBots();
+            
+            // Очищаем и заново генерируем еду
+            foodParticles.length = 0;
+            initFood();
+            
+            hideGameOverMenu();
         }
 
         // Отрисовка
-        function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Отрисовка фона
-            ctx.fillStyle = '#f0f0f0';
+        function draw() {
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Отрисовка еды
-            foods.forEach(food => {
-                const screenX = food.x / settings.mapScale;
-                const screenY = food.y / settings.mapScale;
-                const screenSize = food.size / settings.mapScale;
-                ctx.fillStyle = food.color;
+            drawGrid();
+
+            // Отрисовка частиц еды
+            foodParticles.forEach(food => {
                 ctx.beginPath();
-                ctx.arc(screenX, screenY, screenSize, 0, Math.PI * 2);
+                ctx.arc(food.x - camera.x, food.y - camera.y, food.radius, 0, Math.PI * 2);
+                ctx.fillStyle = food.color;
                 ctx.fill();
+                ctx.closePath();
             });
 
             // Отрисовка ботов
             bots.forEach(bot => {
-                const screenX = bot.x / settings.mapScale;
-                const screenY = bot.y / settings.mapScale;
-                const screenSize = bot.size / settings.mapScale;
-                ctx.fillStyle = bot.color;
                 ctx.beginPath();
-                ctx.arc(screenX, screenY, screenSize, 0, Math.PI * 2);
+                ctx.arc(bot.x - camera.x, bot.y - camera.y, bot.radius, 0, Math.PI * 2);
+                ctx.fillStyle = bot.color;
                 ctx.fill();
+                ctx.closePath();
+                
+                // Отображение имени бота
+                ctx.fillStyle = '#000000';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(bot.name, bot.x - camera.x, bot.y - camera.y + bot.radius + 15);
             });
 
             // Отрисовка игрока
-            const playerScreenX = player.x / settings.mapScale;
-            const playerScreenY = player.y / settings.mapScale;
-            const playerScreenSize = player.size / settings.mapScale;
-            ctx.fillStyle = player.color;
             ctx.beginPath();
-            ctx.arc(playerScreenX, playerScreenY, playerScreenSize, 0, Math.PI * 2);
+            ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
+            ctx.fillStyle = player.color;
             ctx.fill();
+            ctx.closePath();
+            
+            // Отображение имени игрока
+            ctx.fillStyle = '#000000';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(player.name, player.x - camera.x, player.y - camera.y + player.radius + 15);
         }
-
-        // Обновление топ-листа
-        function updateLeaderboard() {
-            const allPlayers = [...bots, player];
-            allPlayers.sort((a, b) => b.size - a.size);
-            topPlayers = allPlayers.slice(0, 5);
-
-            leaderboard.innerHTML = '';
-            topPlayers.forEach((p, index) => {
-                const entry = document.createElement('div');
-                entry.className = 'player-entry';
-                if (p === player) entry.classList.add('player');
-                entry.textContent = `${index + 1}. ${p === player ? 'You' : 'Bot'} (${Math.round(p.size)})`;
-                leaderboard.appendChild(entry);
-            });
-        }
-
-        // Случайный цвет
-        function getRandomColor() {
-            const letters = '0123456789ABCDEF';
-            let color = '#';
-            for (let i = 0; i < 6; i++) {
-                color += letters[Math.floor(Math.random() * 16)];
-            }
-            return color;
-        }
-
-        // Управление
-        let touchStart = null;
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-            joystickBase.style.display = 'block';
-            joystickThumb.style.display = 'block';
-            joystickBase.style.left = `${touchStart.x - 40}px`;
-            joystickBase.style.top = `${touchStart.y - 40}px`;
-            joystickThumb.style.left = `${touchStart.x - 20}px`;
-            joystickThumb.style.top = `${touchStart.y - 20}px`;
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if (!touchStart) return;
-            const touch = e.touches[0];
-            const dx = touch.clientX - touchStart.x;
-            const dy = touch.clientY - touchStart.y;
-            const distance = Math.min(Math.sqrt(dx * dx + dy * dy), 40);
-            const angle = Math.atan2(dy, dx);
-            const thumbX = touchStart.x + Math.cos(angle) * distance;
-            const thumbY = touchStart.y + Math.sin(angle) * distance;
-
-            joystickThumb.style.left = `${thumbX - 20}px`;
-            joystickThumb.style.top = `${thumbY - 20}px`;
-
-            player.direction = { x: dx / 50, y: dy / 50 };
-        });
-
-        canvas.addEventListener('touchend', () => {
-            touchStart = null;
-            joystickBase.style.display = 'none';
-            joystickThumb.style.display = 'none';
-            player.direction = { x: 0, y: 0 };
-        });
 
         // Кнопка рестарта
-        restartButton.addEventListener('click', init);
+        restartButton.addEventListener('click', restartGame);
 
-        // Запуск игры
-        window.addEventListener('load', init);
+        // Основной игровой цикл
+        function gameLoop() {
+            updatePlayer();
+            updateCamera();
+            updateBots();
+            checkFoodCollection();
+            checkCollisions();
+            updateLeaderboard();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Инициализация игры
+        function initGame() {
+            initBots();
+            initFood();
+            gameLoop();
+        }
+
+        // Запуск игры при загрузке
+        window.addEventListener('load', initGame);
+
+        // Обработка изменения размера окна
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            camera.width = canvas.width;
+            camera.height = canvas.height;
         });
     </script>
 </body>
