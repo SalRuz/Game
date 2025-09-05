@@ -327,7 +327,7 @@
                     // Уменьшаем массу игрока
                     player.score -= 10;
                     
-                    // Обновляем массу всех клеток пропорционально
+                    // Обновляем массу всех клетки пропорционально
                     const totalMass = player.cells.reduce((sum, cell) => sum + cell.score, 0);
                     player.cells.forEach(cell => {
                         cell.score = (cell.score / totalMass) * player.score;
@@ -384,7 +384,7 @@
                             y: largestCell.y,
                             radius: Math.sqrt(newScore / Math.PI),
                             color: player.color,
-                            dx: normDx * 20, // Высокая начальная скорость
+                            dx: normDx * 20, // Высокая начальная скорость в сторону курсора
                             dy: normDy * 20,
                             score: newScore,
                             splitVelocity: {
@@ -459,14 +459,15 @@
         // Обновление позиции камеры (зависит от массы игрока)
         function updateCamera() {
             // Вычисляем зум камеры на основе массы игрока
-            // Очень маленький зум (большой обзор) при массе до 100
+            // Большой зум (малый обзор) при малой массе (до 100)
             if (player.score <= 100) {
-                camera.zoom = 0.4; // Очень большой обзор при малой массе
+                camera.zoom = 1.8; // Большой зум при малой массе
+            } else if (player.score > 100 && player.score < 5000) {
+                // Плавное уменьшение зума с ростом массы от 100 до 5000
+                const zoomReduction = (player.score - 100) / 4900; // 0 до 1
+                camera.zoom = 1.8 - zoomReduction * 1.3; // От 1.8 до 0.5
             } else {
-                // Плавное увеличение зума с ростом массы после 100
-                // Каждые 100 массы увеличиваем зум на 0.05
-                const additionalZoom = Math.floor((player.score - 100) / 100) * 0.05;
-                camera.zoom = Math.min(camera.maxZoom, 0.4 + additionalZoom);
+                camera.zoom = 0.5; // Минимальный зум при массе 5000+
             }
             
             // Обновляем размер камеры на основе зума
@@ -548,25 +549,18 @@
                         cell.splitVelocity.x *= 0.9;
                         cell.splitVelocity.y *= 0.9;
                     } else {
-                        // Обычное движение к курсору с тенденцией к объединению
-                        if (player.cells.length > 1) {
-                            // Клетки стремятся к центру масс игрока
-                            const toCenterDx = centerX - cell.x;
-                            const toCenterDy = centerY - cell.y;
-                            const toCenterDist = Math.sqrt(toCenterDx * toCenterDx + toCenterDy * toCenterDy);
+                        // Всегда стремимся к центру масс игрока
+                        const toCenterDx = centerX - cell.x;
+                        const toCenterDy = centerY - cell.y;
+                        const toCenterDist = Math.sqrt(toCenterDx * toCenterDx + toCenterDy * toCenterDy);
+                        
+                        // Двигаемся к центру с небольшой тенденцией к курсору
+                        if (toCenterDist > 0) {
+                            const normToCenterDx = toCenterDx / toCenterDist;
+                            const normToCenterDy = toCenterDy / toCenterDist;
                             
-                            if (toCenterDist > 50) { // Если далеко от центра
-                                // Двигаемся к центру
-                                const normToCenterDx = toCenterDx / toCenterDist;
-                                const normToCenterDy = toCenterDy / toCenterDist;
-                                
-                                cell.dx = normToCenterDx * speed * 0.7 + normDx * speed * 0.3;
-                                cell.dy = normToCenterDy * speed * 0.7 + normDy * speed * 0.3;
-                            } else {
-                                // Обычное движение к курсору
-                                cell.dx = normDx * speed;
-                                cell.dy = normDy * speed;
-                            }
+                            cell.dx = normToCenterDx * speed * 0.8 + normDx * speed * 0.2;
+                            cell.dy = normToCenterDy * speed * 0.8 + normDy * speed * 0.2;
                         } else {
                             // Обычное движение к курсору
                             cell.dx = normDx * speed;
