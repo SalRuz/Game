@@ -12,38 +12,12 @@
             background-color: #f0f0f0;
             touch-action: none;
             font-family: Arial, sans-serif;
+            cursor: none;
         }
         #gameCanvas {
             display: block;
             width: 100vw;
             height: 100vh;
-        }
-        #joystick {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 100px;
-            height: 100px;
-            pointer-events: auto;
-            z-index: 10;
-        }
-        #joystick-base {
-            position: absolute;
-            width: 100px;
-            height: 100px;
-            background: rgba(200, 200, 200, 0.5);
-            border-radius: 50%;
-            display: none;
-        }
-        #joystick-thumb {
-            position: absolute;
-            width: 50px;
-            height: 50px;
-            background: rgba(100, 100, 100, 0.7);
-            border-radius: 50%;
-            left: 25px;
-            top: 25px;
-            display: none;
         }
         #gameOverMenu {
             position: fixed;
@@ -81,6 +55,16 @@
             font-size: 12px;
             z-index: 15;
         }
+        #massIndicator {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 15;
+        }
         .player-entry {
             margin: 3px 0;
         }
@@ -90,6 +74,17 @@
             padding: 1px;
             border: 1px solid rgba(255, 0, 0, 0.5);
             border-radius: 2px;
+        }
+        #customCursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 100;
+            transform: translate(-50%, -50%);
+            display: none;
         }
         @media (orientation: portrait) {
             #orientation-message {
@@ -120,10 +115,8 @@
         Пожалуйста, поверните устройство в горизонтальное положение для игры
     </div>
     <canvas id="gameCanvas"></canvas>
-    <div id="joystick">
-        <div id="joystick-base"></div>
-        <div id="joystick-thumb"></div>
-    </div>
+    <div id="customCursor"></div>
+    <div id="massIndicator">Масса: 20</div>
     <div id="leaderboard"></div>
     <div id="gameOverMenu">
         <div>Game Over!</div>
@@ -136,12 +129,14 @@
         const gameOverMenu = document.getElementById('gameOverMenu');
         const restartButton = document.getElementById('restartButton');
         const leaderboardElement = document.getElementById('leaderboard');
+        const massIndicator = document.getElementById('massIndicator');
+        const customCursor = document.getElementById('customCursor');
 
         // Устанавливаем размер канваса на весь экран
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // Виртуальная игровая карта в 5 раз больше (увеличили в 5 раз)
+        // Виртуальная игровая карта в 5 раз больше
         const virtualWidth = canvas.width * 5;
         const virtualHeight = canvas.height * 5;
 
@@ -150,17 +145,16 @@
             x: 0,
             y: 0,
             width: canvas.width,
-            height: canvas.height
+            height: canvas.height,
+            baseZoom: 1, // Базовый зум камеры
+            zoom: 1,     // Текущий зум камеры
+            minZoom: 0.5, // Минимальный зум
+            maxZoom: 2    // Максимальный зум
         };
 
-        // Джойстик
-        const joystickBase = document.getElementById('joystick-base');
-        const joystickThumb = document.getElementById('joystick-thumb');
-        let joystickActive = false;
-        let joystickX = 0;
-        let joystickY = 0;
-        let joystickStartX = 0;
-        let joystickStartY = 0;
+        // Позиция курсора мыши
+        let mouseX = canvas.width / 2;
+        let mouseY = canvas.height / 2;
 
         // Список имен для ботов
         const botNames = [
@@ -202,23 +196,20 @@
             return colors[Math.floor(Math.random() * colors.length)];
         }
 
-        // Главный игрок (начальный размер 5 поинтов)
+        // Главный игрок (начальный размер 20 поинтов)
         const player = {
             x: virtualWidth / 2,
             y: virtualHeight / 2,
-            radius: 5, // Начальный размер 5 поинтов
+            radius: Math.sqrt(20 / Math.PI), // Начальный размер для 20 поинтов
             color: '#ff0000',
             speed: 5,
             dx: 0,
             dy: 0,
             name: "Player",
-            mass: function() {
-                return Math.PI * this.radius * this.radius;
-            },
-            score: 5 // Начальный счет 5
+            score: 20 // Начальный счет 20
         };
 
-        // Боты (начальный размер 5 поинтов)
+        // Боты (начальный размер 20 поинтов)
         const bots = [];
         const BOT_COUNT = 50; // Количество ботов оставлено прежним
 
@@ -228,69 +219,31 @@
                 bots.push({
                     x: Math.random() * virtualWidth,
                     y: Math.random() * virtualHeight,
-                    radius: 5, // Начальный размер 5 поинтов
+                    radius: Math.sqrt(20 / Math.PI), // Начальный размер для 20 поинтов
                     color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
                     speed: 1 + Math.random() * 1,
                     dx: (Math.random() - 0.5) * 2,
                     dy: (Math.random() - 0.5) * 2,
                     name: botNames[i % botNames.length],
-                    mass: function() {
-                        return Math.PI * this.radius * this.radius;
-                    },
-                    score: 5 // Начальный счет 5
+                    score: 20 // Начальный счет 20
                 });
             }
         }
 
-        // Управление с клавиатуры
-        const keys = {};
-        window.addEventListener('keydown', (e) => keys[e.key] = true);
-        window.addEventListener('keyup', (e) => keys[e.key] = false);
-
-        // Управление джойстиком
-        joystickBase.parentElement.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            joystickActive = true;
-            const touch = e.touches[0];
-            joystickStartX = touch.clientX;
-            joystickStartY = touch.clientY;
-            joystickBase.style.left = (touch.clientX - 50) + 'px';
-            joystickBase.style.top = (touch.clientY - 50) + 'px';
-            joystickBase.style.display = 'block';
-            joystickThumb.style.display = 'block';
+        // Управление курсором мыши
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            
+            // Обновление позиции кастомного курсора
+            customCursor.style.display = 'block';
+            customCursor.style.left = e.clientX + 'px';
+            customCursor.style.top = e.clientY + 'px';
         });
 
-        window.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if (!joystickActive) return;
-            const touch = e.touches[0];
-            const deltaX = touch.clientX - joystickStartX;
-            const deltaY = touch.clientY - joystickStartY;
-            const maxDistance = 50;
-
-            // Нормализация направления
-            const distance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), maxDistance);
-            if (distance > 0) {
-                joystickX = deltaX / maxDistance;
-                joystickY = deltaY / maxDistance;
-            } else {
-                joystickX = 0;
-                joystickY = 0;
-            }
-
-            // Обновление позиции джойстика
-            joystickThumb.style.left = (joystickX * 25 + 25) + 'px';
-            joystickThumb.style.top = (joystickY * 25 + 25) + 'px';
-        });
-
-        window.addEventListener('touchend', () => {
-            joystickActive = false;
-            joystickThumb.style.left = '25px';
-            joystickThumb.style.top = '25px';
-            joystickX = 0;
-            joystickY = 0;
-            joystickBase.style.display = 'none';
-            joystickThumb.style.display = 'none';
+        canvas.addEventListener('mouseleave', () => {
+            customCursor.style.display = 'none';
         });
 
         // Отрисовка фона в клетку
@@ -317,8 +270,17 @@
             }
         }
 
-        // Обновление позиции камеры
+        // Обновление позиции камеры (зависит от массы игрока)
         function updateCamera() {
+            // Вычисляем зум камеры на основе массы игрока
+            // Чем больше масса, тем больше обзор (меньше зум)
+            camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, 100 / player.score));
+            
+            // Обновляем размер камеры на основе зума
+            camera.width = canvas.width / camera.zoom;
+            camera.height = canvas.height / camera.zoom;
+            
+            // Позиция камеры следует за игроком
             camera.x = player.x - camera.width / 2;
             camera.y = player.y - camera.height / 2;
 
@@ -329,32 +291,28 @@
             if (camera.y + camera.height > virtualHeight) camera.y = virtualHeight - camera.height;
         }
 
-        // Обновление позиции игрока
+        // Обновление позиции игрока (следование за курсором мыши)
         function updatePlayer() {
-            player.dx = 0;
-            player.dy = 0;
-
-            // Управление с клавиатуры
-            if (keys['ArrowUp'] || keys['w']) player.dy = -1;
-            if (keys['ArrowDown'] || keys['s']) player.dy = 1;
-            if (keys['ArrowLeft'] || keys['a']) player.dx = -1;
-            if (keys['ArrowRight'] || keys['d']) player.dx = 1;
-
-            // Управление с джойстика
-            if (joystickActive) {
-                player.dx = joystickX;
-                player.dy = joystickY;
+            // Вычисляем направление к курсору мыши
+            const targetX = camera.x + mouseX / camera.zoom;
+            const targetY = camera.y + mouseY / camera.zoom;
+            
+            const dx = targetX - player.x;
+            const dy = targetY - player.y;
+            
+            // Вычисляем расстояние до цели
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 5) {
+                // Нормализуем направление и умножаем на скорость
+                // Скорость уменьшается с увеличением массы
+                const speed = Math.max(2, player.speed * (30 / player.score));
+                player.dx = (dx / distance) * speed;
+                player.dy = (dy / distance) * speed;
+                
+                player.x += player.dx;
+                player.y += player.dy;
             }
-
-            // Нормализация диагонального движения
-            if (player.dx !== 0 || player.dy !== 0) {
-                const length = Math.sqrt(player.dx * player.dx + player.dy * player.dy);
-                player.dx = (player.dx / length) * player.speed;
-                player.dy = (player.dy / length) * player.speed;
-            }
-
-            player.x += player.dx;
-            player.y += player.dy;
 
             // Ограничение по границам виртуальной карты
             if (player.x - player.radius < 0) player.x = player.radius;
@@ -435,7 +393,6 @@
                     player.score += 1;
                     player.radius = Math.sqrt(player.score / Math.PI);
                     foodParticles.splice(i, 1);
-                    spawnFood(1); // Добавляем новую еду
                 }
             }
             
@@ -451,22 +408,23 @@
                         bot.score += 1;
                         bot.radius = Math.sqrt(bot.score / Math.PI);
                         foodParticles.splice(i, 1);
-                        spawnFood(1); // Добавляем новую еду
                     }
                 }
             });
         }
 
-        // Добавление новой еды
-        function spawnFood(count) {
-            for (let i = 0; i < count; i++) {
-                foodParticles.push({
-                    x: Math.random() * virtualWidth,
-                    y: Math.random() * virtualHeight,
-                    radius: 2,
-                    color: getRandomFoodColor()
-                });
-            }
+        // Добавление новой еды (20 штук каждую секунду)
+        function spawnFoodRegularly() {
+            setInterval(() => {
+                for (let i = 0; i < 20; i++) {
+                    foodParticles.push({
+                        x: Math.random() * virtualWidth,
+                        y: Math.random() * virtualHeight,
+                        radius: 2,
+                        color: getRandomFoodColor()
+                    });
+                }
+            }, 1000);
         }
 
         // Респаун бота
@@ -474,16 +432,13 @@
             bots.push({
                 x: Math.random() * virtualWidth,
                 y: Math.random() * virtualHeight,
-                radius: 5, // Начальный размер 5 поинтов
+                radius: Math.sqrt(20 / Math.PI), // Начальный размер для 20 поинтов
                 color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
                 speed: 1 + Math.random() * 1,
                 dx: (Math.random() - 0.5) * 2,
                 dy: (Math.random() - 0.5) * 2,
                 name: botNames[Math.floor(Math.random() * botNames.length)],
-                mass: function() {
-                    return Math.PI * this.radius * this.radius;
-                },
-                score: 5 // Начальный счет 5
+                score: 20 // Начальный счет 20
             });
         }
 
@@ -511,21 +466,23 @@
             }
         }
 
-        // Обновление таблицы лидеров
+        // Обновление таблицы лидеров (без отображения массы)
         function updateLeaderboard() {
             // Создаем массив всех объектов (боты + игрок)
             const allPlayers = [...bots.map(bot => ({
                 name: bot.name,
-                score: Math.round(bot.score),
                 isPlayer: false
             })), {
                 name: player.name,
-                score: Math.round(player.score),
                 isPlayer: true
             }];
             
             // Сортируем по очкам (по убыванию)
-            allPlayers.sort((a, b) => b.score - a.score);
+            allPlayers.sort((a, b) => {
+                const aScore = a.isPlayer ? player.score : bots.find(b => b.name === a.name)?.score || 0;
+                const bScore = b.isPlayer ? player.score : bots.find(b => b.name === b.name)?.score || 0;
+                return bScore - aScore;
+            });
             
             // Берем топ-10
             const topPlayers = allPlayers.slice(0, 10);
@@ -535,9 +492,14 @@
             topPlayers.forEach((p, index) => {
                 const entry = document.createElement('div');
                 entry.className = 'player-entry' + (p.isPlayer ? ' player' : '');
-                entry.textContent = `${index + 1}. ${p.name}: ${p.score}`;
+                entry.textContent = `${index + 1}. ${p.name}`;
                 leaderboardElement.appendChild(entry);
             });
+        }
+
+        // Обновление индикатора массы
+        function updateMassIndicator() {
+            massIndicator.textContent = `Масса: ${Math.round(player.score)}`;
         }
 
         // Показать меню поражения
@@ -554,8 +516,8 @@
         function restartGame() {
             player.x = virtualWidth / 2;
             player.y = virtualHeight / 2;
-            player.radius = 5;
-            player.score = 5;
+            player.radius = Math.sqrt(20 / Math.PI);
+            player.score = 20;
             
             // Очищаем ботов и создаем заново
             bots.length = 0;
@@ -570,15 +532,23 @@
 
         // Отрисовка
         function draw() {
+            // Очищаем canvas
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Сохраняем текущее состояние контекста
+            ctx.save();
+            
+            // Применяем масштабирование (зум камеры)
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(-camera.x, -camera.y);
 
             drawGrid();
 
             // Отрисовка частиц еды
             foodParticles.forEach(food => {
                 ctx.beginPath();
-                ctx.arc(food.x - camera.x, food.y - camera.y, food.radius, 0, Math.PI * 2);
+                ctx.arc(food.x, food.y, food.radius, 0, Math.PI * 2);
                 ctx.fillStyle = food.color;
                 ctx.fill();
                 ctx.closePath();
@@ -587,7 +557,7 @@
             // Отрисовка ботов
             bots.forEach(bot => {
                 ctx.beginPath();
-                ctx.arc(bot.x - camera.x, bot.y - camera.y, bot.radius, 0, Math.PI * 2);
+                ctx.arc(bot.x, bot.y, bot.radius, 0, Math.PI * 2);
                 ctx.fillStyle = bot.color;
                 ctx.fill();
                 ctx.closePath();
@@ -596,12 +566,12 @@
                 ctx.fillStyle = '#000000';
                 ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText(bot.name, bot.x - camera.x, bot.y - camera.y + bot.radius + 15);
+                ctx.fillText(bot.name, bot.x, bot.y + bot.radius + 15);
             });
 
             // Отрисовка игрока
             ctx.beginPath();
-            ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
             ctx.fillStyle = player.color;
             ctx.fill();
             ctx.closePath();
@@ -610,7 +580,10 @@
             ctx.fillStyle = '#000000';
             ctx.font = '14px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(player.name, player.x - camera.x, player.y - camera.y + player.radius + 15);
+            ctx.fillText(player.name, player.x, player.y + player.radius + 15);
+            
+            // Восстанавливаем состояние контекста
+            ctx.restore();
         }
 
         // Кнопка рестарта
@@ -624,6 +597,7 @@
             checkFoodCollection();
             checkCollisions();
             updateLeaderboard();
+            updateMassIndicator();
             draw();
             requestAnimationFrame(gameLoop);
         }
@@ -632,6 +606,7 @@
         function initGame() {
             initBots();
             initFood();
+            spawnFoodRegularly();
             gameLoop();
         }
 
@@ -642,8 +617,6 @@
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            camera.width = canvas.width;
-            camera.height = canvas.height;
         });
     </script>
 </body>
