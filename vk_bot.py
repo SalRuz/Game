@@ -733,7 +733,12 @@ async def send_location_image(user_id):
             response = vk_session.http.post(upload_url, files={"photo": f})
         result = response.json()
         photo_data = vk_session.method("photos.saveMessagesPhoto", {"photo": result["photo"], "server": result["server"], "hash": result["hash"]})[0]
-        params = {"user_id":user_id, "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}", random_id=random.randint(1, 2**31), "message": message}
+        params = {
+         "user_id": user_id, 
+         "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}", 
+         "random_id": random.randint(1, 2**31),  # Исправлено здесь: кавычки и двоеточие
+         "message": message
+        } 
         if keyboard:
             params["keyboard"] = keyboard.get_keyboard()
         await api.messages.send(
