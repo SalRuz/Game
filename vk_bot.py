@@ -1146,7 +1146,7 @@ async def handle_shooting(user_id):
                     p.pop("mutant_hp", None)
                     p.pop("valid_targets", None)
                     save_data()
-        await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
+                    await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
                     return
         if not shotgun_hit:
             messages.append("💨 Вы промахнулись!")
