@@ -1,26 +1,21 @@
 import asyncio
-import aiohttp
+import time
 import logging
 import json
 import os
 import random
 import io
-import time
+import sqlite3
+import aiohttp
 from pathlib import Path
-from datetime import datetime
-from typing import Optional, Dict, List, Any
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
-from vkwave.bots import SimpleLongPollBot, Keyboard, ButtonColor, SimpleBotEvent
-from vkwave.api import API
-from vkwave.client import AIOHTTPClient
+from vkbottle.bot import Bot, Message
+from vkbottle import Keyboard, KeyboardButtonColor, Text, PhotoMessageUploader
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-TOKEN = "vk1.a.CU2M1F0_9rxlYYuzK57JMRnY3XO2WmOP_TpXDxHbki0AM_mwV-_eBjjfF8ByZHz--fIHilfQD6oS4_bcqG-cc_GUaDln_X87jt6lG8bVX5MJUribi1nPEbY9pY1X3j-FGoq2Hc-CF2GDvAzalh9VmYtT-iFmyTDepaeJwZXZyYU0eFZg7BwhHnuqmIhQrdiG5LqhWWf9Pn536k1MVKAknQ"
-GROUP_ID = 233350137
-api_session = API(clients=AIOHTTPClient(), tokens=TOKEN)
-api = api_session.get_context()
-bot = SimpleLongPollBot(tokens=TOKEN, group_id=GROUP_ID)
-
+TOKEN = "vk1.a.1xW2SgtNrmY7IT0LXBRgdZ5Ty3Rk-9t9LusZjvEx_ErEfeKkAN2HF9ONYimFKsQ6cnEhCgQamxjTZC-jxMjNYI76FTou6rmb1zbZBlx7ZVw-pCkant8aaWcAuG04dDgohdLlPbS7Jb53A1L0Eoy3wxhc0xiP47dumu8xop07a2-WoZM77xWTkxWTtI5ce5wXDdaNdMJXUefT27BtXk0erg"
+GROUP_ID = 221169719
+bot = Bot(token=TOKEN)
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "bot.db"
@@ -51,7 +46,7 @@ ARTIFACT_ICONS["Пончик"] = "icons/Пончик.png"
 ARTIFACT_ICONS["Стейк"] = "icons/Стейк.png"
 ARTIFACT_EFFECTS["Пончик"] = {"heal_on_consume": 0.5}
 ARTIFACT_EFFECTS["Стейк"] = {"hunger_on_consume": 0.5}
-DONATION_DURATIONS = {"день": 86400,"неделя": 604800,"месяц": 2592000}
+DONATION_DURATIONS = {"день": 86400, "неделя": 604800, "месяц": 2592000}
 DONATION_EXCLUDED_ITEMS = ["водка", "сигареты", "энергетик нонстоп", "энергетик сталкер", "геркулес"]
 players = {}
 factions = {"🛡️ Долг": [], "☦️ Грех": [], "☢️ Одиночки": []}
@@ -107,9 +102,9 @@ STATE_WAR_SHARED_SQUADS = "war_shared_squads"
 STATE_WAITING_QUOTE_PHOTO = "waiting_quote_photo"
 POINT_COORDINATES = {"Кордон": {"Б1": (136, 866), "Б2": (100, 693), "Б3": (322, 604), "Б4": (256, 92), "Т1": (85, 791), "Т2": (283, 491), "Т3": (482, 615), "Т4": (130, 434), "Т5": (343, 370), "Л1": (174, 748), "Л2": (142, 573), "Л3": (425, 510), "Л4": (420, 373), "Л5": (325, 253), "ТР1": (180, 648), "ТР2": (236, 546), "ТР3": (245, 400), "А1": (62, 611), "А2": (190, 483), "А3": (500, 413)}, "Свалка": {"Б1": (413, 406), "Б2": (661, 192), "Т1": (608, 906), "Т2": (667, 642), "Т3": (227, 451), "Л1": (666, 765), "Л2": (869, 664), "Л3": (879, 390), "Л4": (358, 177), "ТР1": (407, 727), "ТР2": (207, 628), "ТР3": (593, 86), "А1": (471, 578), "А2": (683, 387), "А3": (448, 262)}, "Тёмная долина": {"Б1": (288, 858), "Б2": (626, 516), "Б3": (486, 238), "Т1": (503, 441), "Т2": (363, 180), "Т3": (593, 201), "Л1": (583, 790), "Л2": (509, 650), "Л3": (307, 643), "Л4": (308, 452), "ТР1": (381, 374), "ТР2": (464, 136), "А1": (439, 517), "А2": (627, 410)}, "Поляна": {"Б1": (451, 751), "Б2": (1203, 495), "Б3": (915, 279), "Т1": (205, 761), "Т2": (1051, 401), "Л1": (135, 575), "Л2": (557, 143), "ТР1": (985, 649), "ТР2": (521, 527), "ТР3": (423, 331), "А1": (743, 633), "А2": (373, 499), "А3": (607, 327)}}
 SQUAD_COSTS = {1: {"money": 100, "food": 5, "med": 5, "rad": 5}, 3: {"money": 300, "food": 10, "med": 10, "rad": 10}, 5: {"money": 500, "food": 15, "med": 15, "rad": 15}}
-MIN_SQUADS_FOR_POINT = {"База": 5,"Точка ресурсов": 4,"Аномальная зона": 3,"Логово": 2,"Территория": 1}
-CONVERSION_VALUES = {"шоколадный батончик": {"type": "food", "value": 1},"хлеб": {"type": "food", "value": 2},"колбаса": {"type": "food", "value": 3},"консерва": {"type": "food", "value": 4},"бинт": {"type": "med", "value": 1},"аптечка": {"type": "med", "value": 2},"армейская аптечка": {"type": "med", "value": 3},"научная аптечка": {"type": "special", "med": 3, "rad": 1},"сигареты": {"type": "rad", "value": 1},"водка": {"type": "rad", "value": 2},"радиопротектор": {"type": "rad", "value": 3},"антирад": {"type": "rad", "value": 4}}
-FACTION_ICONS = {"🛡️ Долг": "icons/dolg.png","☦️ Грех": "icons/greh.png","☢️ Одиночки": "icons/odinochki.png"}
+MIN_SQUADS_FOR_POINT = {"База": 5, "Точка ресурсов": 4, "Аномальная зона": 3, "Логово": 2, "Территория": 1}
+CONVERSION_VALUES = {"шоколадный батончик": {"type": "food", "value": 1}, "хлеб": {"type": "food", "value": 2}, "колбаса": {"type": "food", "value": 3}, "консерва": {"type": "food", "value": 4}, "бинт": {"type": "med", "value": 1}, "аптечка": {"type": "med", "value": 2}, "армейская аптечка": {"type": "med", "value": 3}, "научная аптечка": {"type": "special", "med": 3, "rad": 1}, "сигареты": {"type": "rad", "value": 1}, "водка": {"type": "rad", "value": 2}, "радиопротектор": {"type": "rad", "value": 3}, "антирад": {"type": "rad", "value": 4}}
+FACTION_ICONS = {"🛡️ Долг": "icons/dolg.png", "☦️ Грех": "icons/greh.png", "☢️ Одиночки": "icons/odinochki.png"}
 ZOMBIE_FACTION = "🧟 Зомбированные"
 FACTION_ICONS[ZOMBIE_FACTION] = "icons/зомбированные.png"
 LAST_STAND_MODE = False
@@ -120,7 +115,7 @@ zombie_bot = {"money": 0, "squads": 0, "food_units": 0, "med_units": 0, "rad_uni
 ZOMBIE_ACTION_INTERVAL = 1800
 POINT_STRENGTH = {"База": 5, "Точка ресурсов": 4, "Аномальная зона": 3, "Логово": 2, "Территория": 1}
 ZOMBIE_PHASES = {15: {"name": "Стартовые силы", "territories": 1, "loot_times": 5}, 30: {"name": "Низкий старт", "territories": 1, "loot_times": 10}, 45: {"name": "Начальная фаза апокалипсиса", "territories": 2, "loot_times": 10}, 60: {"name": "Неудержимый марш смерти", "territories": 3, "loot_times": 10}, 75: {"name": "Хаос воплоти", "territories": 4, "loot_times": 10}, 100: {"name": "Армагеддон", "territories": 5, "loot_times": 10}}
-FACTION_START_LOCATIONS = {"🛡️ Долг": ("Кордон", "Б1"),"☦️ Грех": ("Тёмная долина", "Б1"),"☢️ Одиночки": ("Свалка", "Б1")}
+FACTION_START_LOCATIONS = {"🛡️ Долг": ("Кордон", "Б1"), "☦️ Грех": ("Тёмная долина", "Б1"), "☢️ Одиночки": ("Свалка", "Б1")}
 FACTION_CHAT_LINKS = {"🛡️ Долг": "https://vk.me/join//eWcWfZ3Kcr3PZtkGLF91BIxJq4GnZ4aeB8=", "☦️ Грех": "https://vk.me/join/gO2fqOqDnL756hWkhjvMm9P2ypNTz7/r2vw=", "☢️ Одиночки": "https://vk.me/join/ynzBEUOPUmsKVaB0K0BhSFnzGZsNJlrFGNY="}
 POINT_TYPES = {"Б1": "База", "Б2": "База", "Б3": "База", "Б4": "База", "Т1": "Территория", "Т2": "Территория", "Т3": "Территория", "Т4": "Территория", "Т5": "Территория", "ТР1": "Точка ресурсов", "ТР2": "Точка ресурсов", "ТР3": "Точка ресурсов", "А1": "Аномальная зона", "А2": "Аномальная зона", "А3": "Аномальная зона", "Л1": "Логово", "Л2": "Логово", "Л3": "Логово", "Л4": "Логово", "Л5": "Логово"}
 LOCATIONS = {"Кордон": ["Т1", "Т2", "Т3", "Т4", "Т5", "ТР1", "ТР2", "ТР3", "Б1", "Б2", "Б3", "Б4", "А1", "А2", "А3", "Л1", "Л2", "Л3", "Л4", "Л5"], "Свалка": ["Т1", "Т2", "Т3", "ТР1", "ТР2", "ТР3", "Б1", "Б2", "А1", "А2", "А3", "Л1", "Л2", "Л3", "Л4"], "Тёмная долина": ["Т1", "Т2", "Т3", "ТР1", "ТР2", "Б1", "Б2", "Б3", "А1", "А2", "Л1", "Л2", "Л3", "Л4"], "Поляна": ["Т1", "Т2", "ТР1", "ТР2", "ТР3", "Б1", "Б2", "Б3", "А1", "А2", "А3", "Л1", "Л2"]}
@@ -141,10 +136,10 @@ MAIN_MENU_TEXT = "Выберите действие:\n\n💡 Команда \"26
 MUTANTS = {"тушканчик": [{"name": "Слабый тушканчик", "hp": 1, "damage": 0.5, "reward": 5}, {"name": "Обычный тушканчик", "hp": 1.5, "damage": 1, "reward": 10}, {"name": "Матёрый тушканчик", "hp": 2, "damage": 1.5, "reward": 15}], "слепой пёс": [{"name": "Слабый слепой пёс", "hp": 2.5, "damage": 1.5, "reward": 15}, {"name": "Обычный слепой пёс", "hp": 2.5, "damage": 2, "reward": 20}, {"name": "Матёрый слепой пёс", "hp": 3, "damage": 2.5, "reward": 25}], "псевдопёс": [{"name": "Слабый псевдопёс", "hp": 3.5, "damage": 3.5, "reward": 35}, {"name": "Обычный псевдопёс", "hp": 3.5, "damage": 4, "reward": 40}, {"name": "Матёрый псевдопёс", "hp": 4, "damage": 4, "reward": 45}], "плоть": [{"name": "Слабая плоть", "hp": 4, "damage": 2.5, "reward": 25}, {"name": "Обычная плоть", "hp": 4.5, "damage": 3, "reward": 30}, {"name": "Матёрая плоть", "hp": 5, "damage": 3, "reward": 35}], "кабан": [{"name": "Слабый кабан", "hp": 4, "damage": 3, "reward": 30}, {"name": "Обычный кабан", "hp": 4.5, "damage": 3.5, "reward": 35}, {"name": "Матёрый кабан", "hp": 5, "damage": 4, "reward": 40}], "кровосос": [{"name": "Слабый кровосос", "hp": 5, "damage": 4, "reward": 40}, {"name": "Обычный кровосос", "hp": 6, "damage": 4.5, "reward": 45}, {"name": "Матёрый кровосос", "hp": 7, "damage": 4.5, "reward": 50}]}
 MUTANT_SPAWN_CHANCES = {"Кордон": {"Л1": {"тушканчик": 20, "слепой пёс": 5, "псевдопёс": 0, "плоть": 10, "кабан": 15, "кровосос": 0}, "Л2": {"тушканчик": 15, "слепой пёс": 20, "псевдопёс": 0, "плоть": 5, "кабан": 20, "кровосос": 0}, "Л3": {"тушканчик": 10, "слепой пёс": 20, "псевдопёс": 10, "плоть": 10, "кабан": 15, "кровосос": 0}, "Л4": {"тушканчик": 10, "слепой пёс": 20, "псевдопёс": 15, "плоть": 10, "кабан": 15, "кровосос": 0}, "Л5": {"тушканчик": 5, "слепой пёс": 25, "псевдопёс": 15, "плоть": 10, "кабан": 15, "кровосос": 0}}, "Свалка": {"Л1": {"тушканчик": 20, "слепой пёс": 15, "псевдопёс": 10, "плоть": 5, "кабан": 5, "кровосос": 0}, "Л2": {"тушканчик": 10, "слепой пёс": 20, "псевдопёс": 15, "плоть": 5, "кабан": 5, "кровосос": 0}, "Л3": {"тушканчик": 15, "слепой пёс": 20, "псевдопёс": 10, "плоть": 10, "кабан": 10, "кровосос": 0}, "Л4": {"тушканчик": 10, "слепой пёс": 10, "псевдопёс": 0, "плоть": 30, "кабан": 10, "кровосос": 0}}, "Тёмная долина": {"Л1": {"тушканчик": 5, "слепой пёс": 10, "псевдопёс": 20, "плоть": 0, "кабан": 5, "кровосос": 15}, "Л2": {"тушканчик": 10, "слепой пёс": 5, "псевдопёс": 5, "плоть": 15, "кабан": 10, "кровосос": 5}, "Л3": {"тушканчик": 15, "слепой пёс": 10, "псевдопёс": 15, "плоть": 5, "кабан": 10, "кровосос": 5}, "Л4": {"тушканчик": 15, "слепой пёс": 20, "псевдопёс": 15, "плоть": 5, "кабан": 10, "кровосос": 0}}, "Поляна": {"Л1": {"тушканчик": 15, "слепой пёс": 10, "псевдопёс": 15, "плоть": 10, "кабан": 10, "кровосос": 5}, "Л2": {"тушканчик": 15, "слепой пёс": 20, "псевдопёс": 10, "плоть": 10, "кабан": 10, "кровосос": 0}}}
 ARTIFACT_INFO_TEXT = "💡 Информация об артефактах: \n \n➖ Восстановление здоровья:\n \n🌒 Кровь камня +0.25❤️\n🌓 Ломоть мяса +0.5❤️\n🌔 Душа +0.75❤️\n🌕 Светляк +1❤️\n \n➖ Вывод радиации:\n \n🌒 Колобок -0.25☢️\n🌓 Медуза -0.5☢️\n🌔 Слизняк -0.75☢️\n🌕 Пузырь -1☢️\n \n➖ Восстановление сил при отдыхе: \n \n🌒 Вспышка +0.5⚡\n🌓 Снежинка +1⚡\n🌔 Лунный свет +1.5⚡\n🌕 Батарейка +2⚡\n \n➖ Защита от разрыва:\n \n🌒 Бенгальский огонь +0.25🐾\n🌓 Выверт +0.5🐾\n🌔 Грави +0.75🐾\n🌕 Золотая рыбка +1🐾\n \n➖ Пулестойкость:\n \n🌒 Пустышка +0.5🛡️\n🌓 Каменный цветок +1🛡️\n🌔 Ночная звезда +1.5🛡️\n🌕 Кристалл +2🛡️\n \n➖ Аномальная защита:\n \n🌒 Колючка +0.25💥\n🌓 Пламя +0.5💥\n🌔 Огненный шар +0.75💥\n🌕 Плёнка +1💥\n \n➖ Нанесение урона:\n \n🌒 Глаз +0.5💢\n🌓 Капли +1💢\n🌔 Кристальная колючка +1.5💢\n🌕 Пружина +2💢\n \n➖ Точность попадания: \n \n🌒 Слизь +0.5🎯\n🌓 Слюда +1🎯\n🌔 Мамины бусы +1.5🎯\n🌕 Морской ёж +2🎯"
-EXHAUSTION_LIMITS = {"База": 200,"Точка ресурсов": 150,"Территория": 100,"Логово": 30, "Аномальная зона": 10}
+EXHAUSTION_LIMITS = {"База": 200, "Точка ресурсов": 150, "Территория": 100, "Логово": 30, "Аномальная зона": 10}
 EMISSION_MAX = 350
 EMISSION_WARNING = 335
-GAME_CHAT_ID = 2000000005 
+GAME_CHAT_ID = 2000000003
 shared_warehouse = {}
 territory_control = {}
 faction_leaders = {}
@@ -155,6 +150,7 @@ faction_shared_squads = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ О
 banned_users = {}
 admin_users = []
 shared_warehouse_money = 0
+photo_uploader = PhotoMessageUploader(bot.api)
 def init_database():
     conn = None
     try:
@@ -192,20 +188,20 @@ def init_database():
             conn.close()
             logger.info("Новая база данных создана")
 def create_start_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("Старт", color=ButtonColor.POSITIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("Старт"), color=KeyboardButtonColor.POSITIVE)
     return k
 def create_next_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("Далее", color=ButtonColor.PRIMARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("Далее"), color=KeyboardButtonColor.PRIMARY)
     return k
 def create_faction_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button(text=f"🛡️ Долг ({len(factions['🛡️ Долг'])}/{MAX_FACTION_SIZES['🛡️ Долг']})", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button(text=f"☦️ Грех ({len(factions['☦️ Грех'])}/{MAX_FACTION_SIZES['☦️ Грех']})", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button(text=f"☢️ Одиночки ({len(factions['☢️ Одиночки'])}/{MAX_FACTION_SIZES['☢️ Одиночки']})", color=ButtonColor.POSITIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text(f"🛡️ Долг ({len(factions['🛡️ Долг'])}/{MAX_FACTION_SIZES['🛡️ Долг']})"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text(f"☦️ Грех ({len(factions['☦️ Грех'])}/{MAX_FACTION_SIZES['☦️ Грех']})"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text(f"☢️ Одиночки ({len(factions['☢️ Одиночки'])}/{MAX_FACTION_SIZES['☢️ Одиночки']})"), color=KeyboardButtonColor.POSITIVE)
     return k
 def get_main_menu_button(point, location=None):
     ptype = POINT_TYPES.get(point, "Территория")
@@ -222,184 +218,184 @@ def get_main_menu_button(point, location=None):
         return "☠️ Логово"
     else:
         return "🧱 Территория"
-async def create_main_menu_keyboard(user_id):
+def create_main_menu_keyboard(user_id):
     p = players[user_id]
     point = p.get("point", "Б1")
     location = p.get("location", "Лагерь")
-    k = Keyboard(one_time=False)
-    k.add_text_button("🏕️ Лагерь", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("👣 Переход", color=ButtonColor.POSITIVE)
-    k.add_text_button(get_main_menu_button(point, location), color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("🛒 Торговец", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("⚔️ Война Группировок", color=ButtonColor.NEGATIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🏕️ Лагерь"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("👣 Переход"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text(get_main_menu_button(point, location)), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("🛒 Торговец"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("⚔️ Война Группировок"), color=KeyboardButtonColor.NEGATIVE)
     if location in BASE_POINTS and point == BASE_POINTS[location]:
-        k.add_row()
-        k.add_text_button("🧰 Склад", color=ButtonColor.SECONDARY)
+        k.row()
+        k.add(Text("🧰 Склад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_camp_menu_keyboard():
     status = get_emission_status()
-    k = Keyboard(one_time=False)
-    k.add_text_button("🎒 Рюкзак", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("🟡 Пояс", color=ButtonColor.POSITIVE)
-    k.add_text_button("💤 Отдых", color=ButtonColor.POSITIVE)
-    k.add_text_button("🔋 Подзарядка", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button(text=f"📊 Статус выброса: {status}", color=ButtonColor.NEGATIVE)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🎒 Рюкзак"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("🟡 Пояс"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("💤 Отдых"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("🔋 Подзарядка"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text(f"📊 Статус выброса: {status}"), color=KeyboardButtonColor.NEGATIVE)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_backpack_menu_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("❇️ Использовать", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("♻️ Сортировка", color=ButtonColor.SECONDARY)
-    k.add_row()
-    k.add_text_button("🔄 Обновить", color=ButtonColor.POSITIVE)
-    k.add_text_button("💡 инфо", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.NEGATIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("❇️ Использовать"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("♻️ Сортировка"), color=KeyboardButtonColor.SECONDARY)
+    k.row()
+    k.add(Text("🔄 Обновить"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("💡 инфо"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_warehouse_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("🔚 Назад", color=ButtonColor.NEGATIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_trader_main_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("💲 Приобрести", color=ButtonColor.POSITIVE)
-    k.add_text_button("💱 Продать", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("⚙️ Починить", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("💲 Приобрести"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("💱 Продать"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("⚙️ Починить"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_trader_category_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("🥫 Провизия", color=ButtonColor.POSITIVE)
-    k.add_text_button("🪖 Снаряжение", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🥫 Провизия"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("🪖 Снаряжение"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_trader_sell_category_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("🥫 Провизия", color=ButtonColor.POSITIVE)
-    k.add_text_button("🪖 Снаряжение", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🌕 Артефакты", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🥫 Провизия"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("🪖 Снаряжение"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🌕 Артефакты"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_equipment_category_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("🔫 Оружие", color=ButtonColor.POSITIVE)
-    k.add_text_button("🦺 Броня", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("📟 Детекторы", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🔫 Оружие"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("🦺 Броня"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("📟 Детекторы"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_equipment_sell_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("🔫 Оружие", color=ButtonColor.POSITIVE)
-    k.add_text_button("🦺 Броня", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("📟 Детекторы", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🔫 Оружие"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("🦺 Броня"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("📟 Детекторы"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
-async def create_repair_keyboard(user_id):
+def create_repair_keyboard(user_id):
     p = players[user_id]
     weapon = p.get("weapon", None)
     armor = p.get("armor", None)
-    k = Keyboard(one_time=False)
+    k = Keyboard(one_time=False, inline=False)
     if weapon:
-        k.add_text_button("🔫 Оружие", color=ButtonColor.POSITIVE)
+        k.add(Text("🔫 Оружие"), color=KeyboardButtonColor.POSITIVE)
     else:
-        k.add_text_button("🔫 отсутствует", color=ButtonColor.SECONDARY)
+        k.add(Text("🔫 отсутствует"), color=KeyboardButtonColor.SECONDARY)
     if armor:
-        k.add_text_button("🦺 Броня", color=ButtonColor.POSITIVE)
+        k.add(Text("🦺 Броня"), color=KeyboardButtonColor.POSITIVE)
     else:
-        k.add_text_button("🦺 отсутствует", color=ButtonColor.SECONDARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.NEGATIVE)
+        k.add(Text("🦺 отсутствует"), color=KeyboardButtonColor.SECONDARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_confirmation_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("✅ Да", color=ButtonColor.POSITIVE)
-    k.add_text_button("❌ Нет", color=ButtonColor.NEGATIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("✅ Да"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("❌ Нет"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_resting_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("✅ Достаточно отдыха", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("✅ Достаточно отдыха"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_use_item_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("Отмена", color=ButtonColor.NEGATIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("Отмена"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_back_only_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_war_main_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("🗺️ Территории зоны 🗺️", color=ButtonColor.NEGATIVE)
-    k.add_row()
-    k.add_text_button("💲 Приобрести сквад", color=ButtonColor.PRIMARY)
-    k.add_text_button("♻️ Управление сквадами", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🗺️ Территории зоны 🗺️"), color=KeyboardButtonColor.NEGATIVE)
+    k.row()
+    k.add(Text("💲 Приобрести сквад"), color=KeyboardButtonColor.PRIMARY)
+    k.add(Text("♻️ Управление сквадами"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_war_territories_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("Кордон", color=ButtonColor.SECONDARY)
-    k.add_text_button("Свалка", color=ButtonColor.SECONDARY)
-    k.add_row()
-    k.add_text_button("Тёмная долина", color=ButtonColor.SECONDARY)
-    k.add_text_button("Поляна", color=ButtonColor.SECONDARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.NEGATIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("Кордон"), color=KeyboardButtonColor.SECONDARY)
+    k.add(Text("Свалка"), color=KeyboardButtonColor.SECONDARY)
+    k.row()
+    k.add(Text("Тёмная долина"), color=KeyboardButtonColor.SECONDARY)
+    k.add(Text("Поляна"), color=KeyboardButtonColor.SECONDARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_hunting_keyboard():
-    k = Keyboard(one_time=False)
+    k = Keyboard(one_time=False, inline=False)
     for i in range(1, 10):
-        k.add_text_button(text=f"🎯 {i}", color=ButtonColor.SECONDARY)
+        k.add(Text(f"🎯 {i}"), color=KeyboardButtonColor.SECONDARY)
         if i % 3 == 0:
-            k.add_row()
-    k.add_text_button("🏃 Побег", color=ButtonColor.NEGATIVE)
+            k.row()
+    k.add(Text("🏃 Побег"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_anomaly_movement_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("⬆️", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("⬅️", color=ButtonColor.PRIMARY)
-    k.add_text_button("➡️", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("⬇️", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🚪 Уйти", color=ButtonColor.NEGATIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("⬆️"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("⬅️"), color=KeyboardButtonColor.PRIMARY)
+    k.add(Text("➡️"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("⬇️"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🚪 Уйти"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_belt_main_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("➕ Повесить", color=ButtonColor.POSITIVE)
-    k.add_text_button("➖ Снять", color=ButtonColor.NEGATIVE)
-    k.add_row()
-    k.add_text_button("💡 Инфо об артефактах", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("➕ Повесить"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("➖ Снять"), color=KeyboardButtonColor.NEGATIVE)
+    k.row()
+    k.add(Text("💡 Инфо об артефактах"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_belt_slot_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("1️⃣ Пояс", color=ButtonColor.PRIMARY)
-    k.add_text_button("2️⃣ Пояс", color=ButtonColor.PRIMARY)
-    k.add_text_button("3️⃣ Пояс", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("1️⃣ Пояс"), color=KeyboardButtonColor.PRIMARY)
+    k.add(Text("2️⃣ Пояс"), color=KeyboardButtonColor.PRIMARY)
+    k.add(Text("3️⃣ Пояс"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_artifact_selection_keyboard(artifacts, page=0):
-    k = Keyboard(one_time=False)
+    k = Keyboard(one_time=False, inline=False)
     items_per_page = 6
     start = page * items_per_page
     end = start + items_per_page
@@ -407,94 +403,94 @@ def create_artifact_selection_keyboard(artifacts, page=0):
     count = 0
     for art in page_items:
         if count > 0 and count % 2 == 0:
-            k.add_row()
-        k.add_text_button(art[:20], color=ButtonColor.SECONDARY)
+            k.row()
+        k.add(Text(art[:20]), color=KeyboardButtonColor.SECONDARY)
         count += 1
-    k.add_row()
+    k.row()
     total_pages = (len(artifacts) + items_per_page - 1) // items_per_page
     if total_pages > 1:
         if page > 0:
-            k.add_text_button("◀️ Туда", color=ButtonColor.PRIMARY)
+            k.add(Text("◀️ Туда"), color=KeyboardButtonColor.PRIMARY)
         if page < total_pages - 1:
-            k.add_text_button("▶️ Сюда", color=ButtonColor.PRIMARY)
-        k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.NEGATIVE)
+            k.add(Text("▶️ Сюда"), color=KeyboardButtonColor.PRIMARY)
+        k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.NEGATIVE)
     return k
-async def create_transition_keyboard(user_id):
+def create_transition_keyboard(user_id):
     current_loc = players[user_id]["location"]
-    k = Keyboard(one_time=False)
-    k.add_text_button(text=f"▶️ {current_loc} ◀️", color=ButtonColor.PRIMARY)
-    k.add_row()
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text(f"▶️ {current_loc} ◀️"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
     for loc in ["Кордон", "Свалка", "Тёмная долина", "Поляна"]:
         if loc != current_loc:
-            k.add_text_button(loc, color=ButtonColor.SECONDARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.NEGATIVE)
+            k.add(Text(loc), color=KeyboardButtonColor.SECONDARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_empty_keyboard():
-    k = Keyboard(one_time=True)
-    k.add_text_button("⏳", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=True, inline=False)
+    k.add(Text("⏳"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_war_buy_squad_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("1 сквад", color=ButtonColor.POSITIVE)
-    k.add_text_button("3 сквада", color=ButtonColor.POSITIVE)
-    k.add_text_button("5 сквадов", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("♻️ Конвертация провизии", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("1 сквад"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("3 сквада"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("5 сквадов"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("♻️ Конвертация провизии"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_war_manage_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("📤 Отправить", color=ButtonColor.POSITIVE)
-    k.add_text_button("📥 Вывести", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("👥 Общие сквады", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("📤 Отправить"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("📥 Вывести"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("👥 Общие сквады"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
-async def create_war_send_location_keyboard(user_id):
-    k = Keyboard(one_time=False)
+def create_war_send_location_keyboard(user_id):
+    k = Keyboard(one_time=False, inline=False)
     for loc in ["Кордон", "Свалка", "Тёмная долина", "Поляна"]:
-        k.add_text_button(loc, color=ButtonColor.SECONDARY)
-        k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.NEGATIVE)
+        k.add(Text(loc), color=KeyboardButtonColor.SECONDARY)
+        k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_attack_confirm_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("✅ Да", color=ButtonColor.POSITIVE)
-    k.add_text_button("❌ Нет", color=ButtonColor.NEGATIVE)
-    k.add_row()
-    k.add_text_button("⚔️ Напасть со сквадами", color=ButtonColor.PRIMARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("✅ Да"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("❌ Нет"), color=KeyboardButtonColor.NEGATIVE)
+    k.row()
+    k.add(Text("⚔️ Напасть со сквадами"), color=KeyboardButtonColor.PRIMARY)
     return k
 def create_shared_squads_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("📥 Пополнить", color=ButtonColor.POSITIVE)
-    k.add_text_button("📤 Вывести", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("📥 Пополнить"), color=KeyboardButtonColor.POSITIVE)
+    k.add(Text("📤 Вывести"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def create_anomaly_path_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("🌀 Путь 1", color=ButtonColor.PRIMARY)
-    k.add_text_button("🌀 Путь 2", color=ButtonColor.PRIMARY)
-    k.add_text_button("🌀 Путь 3", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("🚪 Уйти", color=ButtonColor.NEGATIVE)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("🌀 Путь 1"), color=KeyboardButtonColor.PRIMARY)
+    k.add(Text("🌀 Путь 2"), color=KeyboardButtonColor.PRIMARY)
+    k.add(Text("🌀 Путь 3"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("🚪 Уйти"), color=KeyboardButtonColor.NEGATIVE)
     return k
 def create_zombie_control_keyboard():
-    k = Keyboard(one_time=False)
-    k.add_text_button("⚔️ Агрессивный захват", color=ButtonColor.NEGATIVE)
-    k.add_row()
-    k.add_text_button("⚖️ Обычный режим", color=ButtonColor.PRIMARY)
-    k.add_row()
-    k.add_text_button("📦 Накопление ресурсов", color=ButtonColor.POSITIVE)
-    k.add_row()
-    k.add_text_button("🎯 Установить приоритет", color=ButtonColor.SECONDARY)
-    k.add_text_button("❌ Сбросить приоритет", color=ButtonColor.SECONDARY)
-    k.add_row()
-    k.add_text_button("🔚 Назад", color=ButtonColor.SECONDARY)
+    k = Keyboard(one_time=False, inline=False)
+    k.add(Text("⚔️ Агрессивный захват"), color=KeyboardButtonColor.NEGATIVE)
+    k.row()
+    k.add(Text("⚖️ Обычный режим"), color=KeyboardButtonColor.PRIMARY)
+    k.row()
+    k.add(Text("📦 Накопление ресурсов"), color=KeyboardButtonColor.POSITIVE)
+    k.row()
+    k.add(Text("🎯 Установить приоритет"), color=KeyboardButtonColor.SECONDARY)
+    k.add(Text("❌ Сбросить приоритет"), color=KeyboardButtonColor.SECONDARY)
+    k.row()
+    k.add(Text("🔚 Назад"), color=KeyboardButtonColor.SECONDARY)
     return k
 def load_data():
     global players, factions, shared_warehouse, shared_warehouse_money, territory_control, faction_leaders, territory_exhaustion, emission_counter, last_restored_categories, faction_shared_squads, banned_users, admin_users
@@ -613,7 +609,7 @@ def save_data():
         logger.debug("💾 Данные сохранены в SQLite.")
     except Exception as e:
         logger.error(f"❌ Ошибка сохранения в SQLite: {e}")
-async def has_active_donation(user_id):
+def has_active_donation(user_id):
     p = players.get(user_id)
     if not p:
         return False
@@ -621,7 +617,7 @@ async def has_active_donation(user_id):
     if end_time and time.time() < end_time:
         return True
     return False
-async def get_donation_artifact(user_id):
+def get_donation_artifact(user_id):
     p = players.get(user_id)
     if not p:
         return None
@@ -646,7 +642,7 @@ async def remove_donation(user_id):
     p["donation_end_time"] = None
     p["donation_artifact"] = None
     save_data()
-    await send_message(user_id, "⏰ Ваш донат-статус истёк. Привилегии отключены.", None)
+    await send_message(user_id, "⏰ Ваш донат-статус истёк. Привилегии отключены.")
 def get_random_artifact_by_rarity(anomaly_type):
     artifacts = ARTIFACTS[anomaly_type]
     weighted_artifacts = []
@@ -671,49 +667,46 @@ def get_random_artifact_by_rarity(anomaly_type):
     return artifacts[0]
 async def get_user_info(user_id):
     try:
-        user = vk_session.method("users.get", {"user_ids": user_id, "fields": "screen_name"})[0]
-        first_name = user['first_name']
-        screen_name = user.get("screen_name", "")
+        users = await bot.api.users.get(user_ids=[user_id], fields=["screen_name"])
+        user = users[0]
+        first_name = user.first_name
+        screen_name = user.screen_name or ""
         return first_name, screen_name
     except Exception as e:
         logger.error(f"Ошибка получения имени: {e}")
         return "друг", ""
 async def get_user_avatar(user_id):
     try:
-        user = vk_session.method("users.get", {"user_ids": user_id, "fields": "photo_200"})[0]
-        photo_url = user.get("photo_200")
+        users = await bot.api.users.get(user_ids=[user_id], fields=["photo_200"])
+        user = users[0]
+        photo_url = user.photo_200
         if photo_url:
-            response = vk_session.http.get(photo_url)
-            img = Image.open(io.BytesIO(response.content))
-            return img
+            async with aiohttp.ClientSession() as session:
+                async with session.get(photo_url) as resp:
+                    data = await resp.read()
+                    img = Image.open(io.BytesIO(data))
+                    return img
     except Exception as e:
         logger.error(f"Ошибка получения аватарки: {e}")
     return None
-async def send_message(user_id):
-    if vk_session is None:
-        logger.error("❌ vk_session не передан в send_message")
-        return
-    if not message.strip():
+async def send_message(user_id, message, keyboard=None, peer_id=None):
+    if not message or not message.strip():
         logger.warning("Попытка отправить пустое сообщение")
         return
     try:
-        if peer_id and peer_id != user_id:
-            await api.messages.send(
-                peer_id=peer_id,
-                message=message,
-                keyboard=keyboard,
-                random_id=random.randint(1, 2**31)
-            )
-        else:
-            await api.messages.send(
-                user_id=user_id,
-                message=message,
-                keyboard=keyboard,
-                random_id=random.randint(1, 2**31)
-            )
+        target_id = peer_id if peer_id else user_id
+        await bot.api.messages.send(peer_id=target_id, message=message, random_id=0, keyboard=keyboard.get_json() if keyboard else None)
     except Exception as e:
         logger.error(f"Ошибка отправки сообщения: {e}")
-async def send_location_image(user_id):
+async def send_photo_message(user_id, img_buffer, message="", keyboard=None, peer_id=None):
+    try:
+        target_id = peer_id if peer_id else user_id
+        attachment = await photo_uploader.upload(img_buffer, peer_id=target_id)
+        await bot.api.messages.send(peer_id=target_id, message=message, attachment=attachment, random_id=0, keyboard=keyboard.get_json() if keyboard else None)
+    except Exception as e:
+        logger.error(f"Ошибка отправки фото: {e}")
+        await send_message(user_id, message, keyboard, peer_id)
+async def send_location_image(user_id, location, point, message, keyboard):
     loc_short = location
     if location == "Тёмная долина":
         loc_short = "ТД"
@@ -728,27 +721,7 @@ async def send_location_image(user_id):
         await send_message(user_id, message, keyboard)
         return
     try:
-        upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-        with open(img_path, "rb") as f:
-            response = vk_session.http.post(upload_url, files={"photo": f})
-        result = response.json()
-        photo_data = vk_session.method("photos.saveMessagesPhoto", {"photo": result["photo"], "server": result["server"], "hash": result["hash"]})[0]
-        params = {
-         "user_id": user_id, 
-         "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}", 
-         "random_id": random.randint(1, 2**31),  # Исправлено здесь: кавычки и двоеточие
-         "message": message
-        } 
-        if keyboard:
-            params["keyboard"] = keyboard.get_keyboard()
-        await api.messages.send(
-            user_id=params.get("user_id") or user_id,
-            peer_id=params.get("peer_id"),
-            message=params.get("message", ""),
-            attachment=params.get("attachment"),
-            keyboard=params.get("keyboard"),
-            random_id=params.get("random_id", random.randint(1, 2**31))
-        )
+        await send_photo_message(user_id, img_path, message, keyboard)
     except Exception as e:
         logger.error(f"Ошибка отправки изображения локации: {e}")
         await send_message(user_id, message, keyboard)
@@ -774,7 +747,7 @@ def reset_all_data():
     init_territory_exhaustion()
     save_data()
     logger.info("✅ Все данные сброшены!")
-async def get_belt_bonus(user_id):
+def get_belt_bonus(user_id, stat):
     p = players[user_id]
     belt = p.get("belt", [None, None, None])
     total = 0
@@ -782,13 +755,13 @@ async def get_belt_bonus(user_id):
         if art and art in ARTIFACT_EFFECTS:
             total += ARTIFACT_EFFECTS[art].get(stat, 0)
     return total
-async def normalize_stats(user_id):
+def normalize_stats(user_id):
     p = players[user_id]
     p["health"] = round(max(0, min(10, p.get("health", 10))), 1)
     p["radiation"] = round(max(0, min(10, p.get("radiation", 0))), 1)
     p["hunger"] = round(max(0, min(10, p.get("hunger", 0))), 1)
     p["stamina"] = round(max(0, min(10, p.get("stamina", 10))), 1)
-async def get_player_position(user_id):
+def get_player_position(user_id):
     p = players[user_id]
     if p.get("state") != STATE_TRANSITION_WAIT:
         return p.get("location"), p.get("point")
@@ -808,7 +781,7 @@ async def get_player_position(user_id):
         if prev_loc and prev_point:
             return prev_loc, prev_point
     return p.get("location"), p.get("point")
-async def apply_belt_effects_on_exploration(user_id):
+def apply_belt_effects_on_exploration(user_id):
     p = players[user_id]
     health_regen = get_belt_bonus(user_id, "health_regen")
     radiation_reduce = get_belt_bonus(user_id, "radiation_reduce")
@@ -817,24 +790,24 @@ async def apply_belt_effects_on_exploration(user_id):
     if radiation_reduce > 0:
         p["radiation"] = max(0, p["radiation"] - radiation_reduce)
     normalize_stats(user_id)
-async def apply_belt_effects_on_rest(user_id):
+def apply_belt_effects_on_rest(user_id):
     return get_belt_bonus(user_id, "stamina_regen")
-async def get_total_stats_with_belt(user_id):
+def get_total_stats_with_belt(user_id):
     p = players[user_id]
     return {"blast_resist": p.get("blast_resist", 0) + get_belt_bonus(user_id, "blast_resist"), "bullet_resist": p.get("bullet_resist", 0) + get_belt_bonus(user_id, "bullet_resist"), "anomaly_resist": p.get("anomaly_resist", 0) + get_belt_bonus(user_id, "anomaly_resist"), "weapon_damage": p.get("weapon_damage", 0) + get_belt_bonus(user_id, "weapon_damage"), "weapon_accuracy": p.get("weapon_accuracy", 0) + get_belt_bonus(user_id, "weapon_accuracy")}
-async def get_total_weapon_damage(user_id):
+def get_total_weapon_damage(user_id):
     p = players[user_id]
     return p.get("weapon_damage", 0) + get_belt_bonus(user_id, "weapon_damage")
-async def get_total_weapon_accuracy(user_id):
+def get_total_weapon_accuracy(user_id):
     p = players[user_id]
     return int(p.get("weapon_accuracy", 0) + get_belt_bonus(user_id, "weapon_accuracy"))
-async def get_total_blast_resist(user_id):
+def get_total_blast_resist(user_id):
     p = players[user_id]
     return p.get("blast_resist", 0) + get_belt_bonus(user_id, "blast_resist")
-async def get_total_anomaly_resist(user_id):
+def get_total_anomaly_resist(user_id):
     p = players[user_id]
     return p.get("anomaly_resist", 0) + get_belt_bonus(user_id, "anomaly_resist")
-async def format_camp_info(user_id):
+def format_camp_info(user_id):
     p = players[user_id]
     nickname = p["nickname"]
     faction = p["faction"]
@@ -864,18 +837,18 @@ async def format_camp_info(user_id):
     belt_str = f"1️⃣{belt[0] or '-'} 2️⃣{belt[1] or '-'} 3️⃣{belt[2] or '-'}"
     lines = [f"«💬 Клич: {nickname}", f"«👥 Группировка: {faction}", f"«🗺 Местоположение: {full_loc}", "————————————", f"«❤️ Здоровье: {health}/10", f"«☢️ Радиация: {radiation}/10", f"«🍽️ Голод: {hunger}/10", f"«⚡ Выносливость: {stamina}/10", "————————————", f"«📟 Детектор: {'отсутствует' if not detector else detector} {detector_charge}/{detector_max_charge}🔋", f"«🪖 Броня: {'отсутствует' if not armor else armor} 🔧{armor_durability}/{armor_max_durability}", f"(🛡) {bullet_resist}", f"(🐾) {blast_resist}", f"(💥) {anomaly_resist}", f"«🔫 Оружие: {'отсутствует' if not weapon else weapon} 🔧{weapon_durability}/{weapon_max_durability}", f"(💢) {weapon_damage}", f"(🎯) {weapon_accuracy}", f"«🟡 Пояс: {belt_str}", f"«💲 Деньги: {money}р"]
     return "\n".join(lines)
-async def format_minimal_info(user_id):
+def format_minimal_info(user_id):
     p = players[user_id]
     health = p.get("health", 10)
     radiation = p.get("radiation", 0)
     hunger = p.get("hunger", 0)
     stamina = p.get("stamina", 10)
     return f"«❤️ Здоровье: {health}/10\n«☢️ Радиация: {radiation}/10\n«🍽️ Голод: {hunger}/10\n«⚡ Выносливость: {stamina}/10"
-async def get_sort_mode(user_id):
+def get_sort_mode(user_id):
     return players[user_id].get("backpack_sort", 0)
-async def set_sort_mode(user_id):
+def set_sort_mode(user_id, mode):
     players[user_id]["backpack_sort"] = mode % 3
-async def format_backpack_info(user_id):
+def format_backpack_info(user_id):
     p = players[user_id]
     backpack = p.get("backpack", {})
     money = p.get("money", 0)
@@ -909,7 +882,7 @@ async def format_backpack_info(user_id):
                     sorted_items = sorted(active_items.items(), key=lambda x: x[1], reverse=True)
                 items_str = "\n".join([f"{item}: {count}" for item, count in sorted_items])
     return "🎒 Ваши вещи:\n" + items_str + "\n————————————\n" + f"💲 Ваши деньги: {money}р"
-async def format_warehouse_info(user_id):
+def format_warehouse_info(user_id=None):
     if LAST_STAND_MODE and user_id:
         faction = players[user_id].get("faction")
         warehouse = faction_warehouses.get(faction, {})
@@ -933,27 +906,27 @@ def get_available_transitions(loc, point):
     return TRANSITION_ROUTES.get((loc, point), [])
 def is_valid_point(loc_name, point):
     return point in LOCATIONS.get(loc_name, [])
-async def apply_radiation_damage(user_id):
+def apply_radiation_damage(user_id):
     p = players[user_id]
     if p["radiation"] >= 10:
         p["health"] = max(0, p["health"] - 2)
         return True
     return False
-async def apply_hunger_damage(user_id):
+def apply_hunger_damage(user_id):
     p = players[user_id]
     if p["hunger"] >= 10:
         p["health"] = max(0, p["health"] - 1)
         p["stamina"] = max(0, p["stamina"] - 2)
         return True
     return False
-async def get_damage_reason(user_id):
+def get_damage_reason(user_id):
     reasons = []
     if players[user_id]["radiation"] >= 10:
         reasons.append("радиация")
     if players[user_id]["hunger"] >= 10:
         reasons.append("голод")
     return " и ".join(reasons) if reasons else ""
-async def check_vital_conditions(user_id):
+def check_vital_conditions(user_id, action="исследование"):
     p = players[user_id]
     messages = []
     if p["health"] <= 0:
@@ -1052,7 +1025,7 @@ def select_mutant(location, point):
                 rank = 2
             return MUTANTS[mutant_type][rank]
     return None
-async def calculate_and_apply_death_losses(user_id):
+def calculate_and_apply_death_losses(user_id, max_items=10, max_money=100):
     p = players[user_id]
     backpack = p.get("backpack", {})
     money = p.get("money", 0)
@@ -1091,8 +1064,235 @@ async def lose_random_items_on_death(user_id):
     lost_items, money_lost = calculate_and_apply_death_losses(user_id, max_items=10, max_money=100)
     msg_lines = ["💀 Вы в критическом состоянии!"]
     msg_lines.extend(format_death_losses(lost_items, money_lost))
-    await send_message(user_id, "\n".join(msg_lines), None)
+    await send_message(user_id, "\n".join(msg_lines))
     p["death_notified"] = True
+    save_data()
+def get_emission_status():
+    global emission_counter, EMISSION_MAX
+    ratio = emission_counter / EMISSION_MAX
+    if ratio < 0.2:
+        return "🟢"
+    elif ratio < 0.4:
+        return "🟡"
+    elif ratio < 0.6:
+        return "🟠"
+    elif ratio < 0.8:
+        return "🔴"
+    elif ratio < 0.957:
+        return "⚫"
+    else:
+        return "☠️"
+def init_territory_exhaustion():
+    global territory_exhaustion
+    territory_exhaustion = {}
+    for loc in LOCATIONS:
+        territory_exhaustion[loc] = {}
+        for point in LOCATIONS[loc]:
+            territory_exhaustion[loc][point] = 0
+    save_data()
+def init_territory_control():
+    global territory_control
+    territory_control = {}
+    for loc in LOCATIONS:
+        territory_control[loc] = {}
+        for point in LOCATIONS[loc]:
+            territory_control[loc][point] = {"faction": None, "squads": 0}
+    territory_control["Кордон"]["Б1"] = {"faction": "🛡️ Долг", "squads": 5}
+    territory_control["Тёмная долина"]["Б1"] = {"faction": "☦️ Грех", "squads": 5}
+    territory_control["Свалка"]["Б1"] = {"faction": "☢️ Одиночки", "squads": 5}
+    save_data()
+def get_territory_owner(location, point):
+    if location in territory_control and point in territory_control[location]:
+        return territory_control[location][point].get("faction")
+    return None
+def get_territory_squads(location, point):
+    if location in territory_control and point in territory_control[location]:
+        return territory_control[location][point].get("squads", 0)
+    return 0
+def set_territory_control(location, point, faction, squads):
+    global territory_control
+    if location not in territory_control:
+        territory_control[location] = {}
+    territory_control[location][point] = {"faction": faction, "squads": squads}
+    save_data()
+def is_player_on_own_territory(user_id):
+    p = players[user_id]
+    location, point = get_player_position(user_id)
+    faction = p.get("faction")
+    owner = get_territory_owner(location, point)
+    return owner == faction
+def get_faction_leader(faction):
+    return faction_leaders.get(faction)
+def set_faction_leader(faction, user_id):
+    global faction_leaders
+    faction_leaders[faction] = user_id
+    save_data()
+def get_players_on_territory(location, point):
+    result = []
+    for uid, p in players.items():
+        loc, pt = get_player_position(uid)
+        if loc == location and pt == point:
+            result.append(uid)
+    return result
+def get_player_bullet_resist(user_id):
+    p = players[user_id]
+    return p.get("bullet_resist", 0) + get_belt_bonus(user_id, "bullet_resist")
+def get_armor_category(user_id):
+    p = players[user_id]
+    armor = p.get("armor")
+    if not armor:
+        return 0
+    faction = p.get("faction")
+    for i, item in enumerate(EQUIPMENT[faction]["armor"]):
+        if item[0] == armor:
+            return i + 1
+    return 0
+def check_territory_exhaustion(location, point):
+    ptype = POINT_TYPES.get(point, "Территория")
+    limit = EXHAUSTION_LIMITS.get(ptype, 100)
+    current = territory_exhaustion.get(location, {}).get(point, 0)
+    return current < limit
+def add_territory_exhaustion(location, point):
+    global territory_exhaustion
+    if location not in territory_exhaustion:
+        territory_exhaustion[location] = {}
+    territory_exhaustion[location][point] = territory_exhaustion[location].get(point, 0) + 1
+    save_data()
+def find_player_by_mention_or_nickname(target):
+    target = target.strip()
+    if target.startswith('@'):
+        screen_name = target[1:].lower()
+        for uid, data in players.items():
+            if data.get("screen_name", "").lower() == screen_name:
+                return uid
+        return None
+    target_lower = target.lower()
+    for uid, data in players.items():
+        nickname = data.get("nickname", "")
+        if nickname.lower() == target_lower:
+            return uid
+    for uid, data in players.items():
+        nickname = data.get("nickname", "")
+        if target_lower in nickname.lower():
+            return uid
+    return None
+def is_admin(user_id):
+    return user_id == 353430025 or user_id in admin_users
+def is_game_open():
+    for faction in factions:
+        if len(factions[faction]) < MAX_FACTION_SIZES[faction]:
+            return False
+    return True
+def find_nearest_faction_territory(user_id):
+    p = players[user_id]
+    faction = p.get("faction")
+    current_loc = p.get("location")
+    priority_types = ["База", "Точка ресурсов", "Территория", "Аномальная зона", "Логово"]
+    for ptype in priority_types:
+        for point in LOCATIONS.get(current_loc, []):
+            if POINT_TYPES.get(point) == ptype:
+                if get_territory_owner(current_loc, point) == faction:
+                    return current_loc, point
+    for loc in LOCATIONS:
+        for ptype in priority_types:
+            for point in LOCATIONS.get(loc, []):
+                if POINT_TYPES.get(point) == ptype:
+                    if get_territory_owner(loc, point) == faction:
+                        return loc, point
+    return None, None
+async def increment_emission():
+    global emission_counter, last_restored_categories
+    emission_counter += 1
+    warning_threshold = int(EMISSION_MAX * 0.75)
+    if emission_counter == warning_threshold:
+        for uid in players:
+            if uid in banned_users:
+                continue
+            p = players[uid]
+            faction = p.get("faction")
+            if not faction or faction == "None" or faction is None:
+                continue
+            state = p.get("state")
+            if state in [STATE_WAITING_FOR_START, STATE_READING_INSTRUCTIONS, STATE_CHOOSING_FACTION, STATE_ENTERING_NICKNAME]:
+                continue
+            await send_message(uid, "⚠️ ВНИМАНИЕ! Приближается выброс! Укройтесь в лагере!")
+    if emission_counter >= EMISSION_MAX:
+        await trigger_emission()
+    save_data()
+async def trigger_emission():
+    global emission_counter, last_restored_categories, territory_exhaustion
+    categories = ["База", "Точка ресурсов", "Территория", "Логово", "Аномальная зона"]
+    num_categories = random.choice([1, 2])
+    restored = random.sample(categories, num_categories)
+    last_restored_categories = restored
+    for loc in LOCATIONS:
+        for point in LOCATIONS[loc]:
+            ptype = POINT_TYPES.get(point, "Территория")
+            if ptype in restored:
+                territory_exhaustion[loc][point] = 0
+    safe_states = [STATE_IN_CAMP, STATE_IN_BACKPACK, STATE_RESTING, STATE_USING_ITEM, STATE_BELT_MAIN, STATE_BELT_SELECT_SLOT, STATE_BELT_SELECT_ARTIFACT, STATE_BELT_EQUIP, STATE_BELT_UNEQUIP]
+    dead_players = []
+    for uid, p in players.items():
+        if uid in banned_users:
+            continue
+        faction = p.get("faction")
+        if not faction or faction == "None" or faction is None:
+            continue
+        state = p.get("state")
+        if state in [STATE_WAITING_FOR_START, STATE_READING_INSTRUCTIONS, STATE_CHOOSING_FACTION, STATE_ENTERING_NICKNAME]:
+            continue
+        if state not in safe_states:
+            if state == STATE_TRANSITION_WAIT:
+                p["transition_end_time"] = None
+                if p.get("previous_location") and p.get("previous_point"):
+                    p["location"] = p["previous_location"]
+                    p["point"] = p["previous_point"]
+                p["previous_location"] = None
+                p["previous_point"] = None
+                p["state"] = STATE_IN_MENU
+            elif state in [STATE_HUNTING, STATE_HUNTING_SHOOTING, STATE_ANOMALY_EXPLORE]:
+                p["state"] = STATE_IN_MENU
+                p["artifact_positions"] = []
+                p["anomaly_positions"] = []
+                p["hidden_anomaly_positions"] = []
+                p["current_mutant"] = None
+                p["mutant_hp"] = None
+                p["anomaly_path_choosing"] = False
+            p["health"] = 0
+            p["hunger"] = 10
+            p["radiation"] = 10
+            p["death_notified"] = True
+            nickname = p.get("nickname", "Неизвестный")
+            location = p.get("location", "?")
+            point = p.get("point", "?")
+            if faction != ZOMBIE_FACTION:
+                dead_players.append(f"• {nickname} ({faction}) — {location} {point}")
+            await send_message(uid, "☠️ Вы погибли от выброса! Нужно было укрыться в лагере!")
+    emission_counter = 0
+    restored_text = ", ".join(restored)
+    for uid, p in players.items():
+        if uid in banned_users:
+            continue
+        faction = p.get("faction")
+        if not faction or faction == "None" or faction is None:
+            continue
+        state = p.get("state")
+        if state in [STATE_WAITING_FOR_START, STATE_READING_INSTRUCTIONS, STATE_CHOOSING_FACTION, STATE_ENTERING_NICKNAME]:
+            continue
+        await send_message(uid, f"☢️ Выброс завершён!\n♻️ Восстановлены: {restored_text}")
+    if dead_players and GAME_CHAT_ID:
+        dead_list = "\n".join(dead_players)
+        chat_msg = f"☢️ ВЫБРОС ЗАВЕРШЁН!\n\n☠️ Погибшие сталкеры:\n{dead_list}\n\n♻️ Восстановлены: {restored_text}"
+        try:
+            await bot.api.messages.send(peer_id=GAME_CHAT_ID, message=chat_msg, random_id=0)
+        except Exception as e:
+            logger.error(f"Ошибка отправки в беседу: {e}")
+    elif GAME_CHAT_ID:
+        chat_msg = f"☢️ ВЫБРОС завершён!\n\n✅ Все сталкеры укрылись!\n\n♻️ Восстановлены: {restored_text}"
+        try:
+            await bot.api.messages.send(peer_id=GAME_CHAT_ID, message=chat_msg, random_id=0)
+        except Exception as e:
+            logger.error(f"Ошибка отправки в беседу: {e}")
     save_data()
 async def handle_shooting(user_id):
     p = players[user_id]
@@ -1172,7 +1372,7 @@ async def handle_shooting(user_id):
                 p.pop("mutant_hp", None)
                 p.pop("valid_targets", None)
                 save_data()
-        await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
+                await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
                 return
     if random.randint(1, 100) <= 10:
         messages.append("🛡️ Вы уклонились от атаки!")
@@ -1196,7 +1396,7 @@ async def handle_shooting(user_id):
                 p.pop("valid_targets", None)
                 normalize_stats(user_id)
                 save_data()
-        await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
+                await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
                 return
     if random.randint(1, 100) <= 25:
         equip_to_damage = []
@@ -1230,7 +1430,7 @@ async def handle_shooting(user_id):
     messages.append(battle_info)
     p["state"] = STATE_HUNTING
     save_data()
-        await send_message(user_id, "\n".join(messages), create_hunting_keyboard())
+    await send_message(user_id, "\n".join(messages), create_hunting_keyboard())
 async def handle_exploration(user_id):
     p = players[user_id]
     point = p["point"]
@@ -1244,20 +1444,20 @@ async def handle_exploration(user_id):
         return
     if ptype == "Аномальная зона":
         if p["health"] <= 0:
-        await send_message(user_id, "💀 Вы в критическом состоянии! Исследование невозможно.", create_main_menu_keyboard(user_id))
+            await send_message(user_id, "💀 Вы в критическом состоянии! Исследование невозможно.", create_main_menu_keyboard(user_id))
             return
         if not p.get("detector"):
-        await send_message(user_id, "❌ У вас нет детектора — исследовать аномалии нельзя.", create_main_menu_keyboard(user_id))
+            await send_message(user_id, "❌ У вас нет детектора — исследовать аномалии нельзя.", create_main_menu_keyboard(user_id))
             return
         if p.get("detector_charge", 0) <= 0:
-        await send_message(user_id, "🔋 Детектор разряжен — сначала подзарядите его.", create_main_menu_keyboard(user_id))
+            await send_message(user_id, "🔋 Детектор разряжен — сначала подзарядите его.", create_main_menu_keyboard(user_id))
             return
         if p["stamina"] <= 0:
-        await send_message(user_id, "😴 У вас закончилась выносливость — пора отдохнуть.", create_main_menu_keyboard(user_id))
+            await send_message(user_id, "😴 У вас закончилась выносливость — пора отдохнуть.", create_main_menu_keyboard(user_id))
             return
         await send_message(user_id, "🔍 Исследование...", create_empty_keyboard())
         add_territory_exhaustion(location, point)
-        increment_emission(vk_session)
+        await increment_emission()
         p["stamina"] = max(0, p["stamina"] - 1)
         p["hunger"] = min(10, p["hunger"] + 0.5)
         status_messages = []
@@ -1287,7 +1487,7 @@ async def handle_exploration(user_id):
             p["state"] = STATE_IN_MENU
             normalize_stats(user_id)
             save_data()
-        await send_message(user_id, death_msg, create_main_menu_keyboard(user_id))
+            await send_message(user_id, death_msg, create_main_menu_keyboard(user_id))
             return
         init_anomaly_exploration(user_id)
         if p.get("anomaly_path_choosing"):
@@ -1300,14 +1500,10 @@ async def handle_exploration(user_id):
             msg_parts.append("⚠️ Впереди опасный участок! Выберите путь:")
             msg_parts.append("")
             msg_parts.append("🌀 Только один путь безопасен...")
-        await send_message(user_id, "\n".join(msg_parts), create_anomaly_path_keyboard())
+            await send_message(user_id, "\n".join(msg_parts), create_anomaly_path_keyboard())
         else:
             try:
                 img_buffer = generate_anomaly_map_image(user_id)
-                upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-                response = vk_session.http.post(upload_url, files={"photo": ("map.png", img_buffer, "image/png")})
-                result = response.json()
-                photo_data = vk_session.method("photos.saveMessagesPhoto", {"photo": result["photo"], "server": result["server"], "hash": result["hash"]})[0]
                 atype = p.get("current_anomaly_type", "грави")
                 msg_parts = []
                 if status_messages:
@@ -1319,27 +1515,27 @@ async def handle_exploration(user_id):
                 alerts = get_detector_alerts(user_id)
                 if alerts:
                     msg_parts.append(alerts)
-                await api.messages.send( {user_id=user_id, "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}", random_id=random.randint(1, 2**31), "message": "\n".join(msg_parts), "keyboard": create_anomaly_movement_keyboard().get_keyboard()})
+                await send_photo_message(user_id, img_buffer, "\n".join(msg_parts), create_anomaly_movement_keyboard())
             except Exception as e:
                 logger.error(f"Ошибка генерации карты: {e}")
-        await send_message(user_id, "🌀 Вы вошли в аномальную зону. Используйте кнопки для передвижения.", create_anomaly_movement_keyboard())
+                await send_message(user_id, "🌀 Вы вошли в аномальную зону. Используйте кнопки для передвижения.", create_anomaly_movement_keyboard())
         return
     if ptype == "Логово":
         if p["health"] <= 0:
-        await send_message(user_id, "💀 Вы в критическом состоянии! Охота невозможна.", create_main_menu_keyboard(user_id))
+            await send_message(user_id, "💀 Вы в критическом состоянии! Охота невозможна.", create_main_menu_keyboard(user_id))
             return
         if not p.get("weapon"):
-        await send_message(user_id, "❌ У вас нет оружия — охотиться нельзя.", create_main_menu_keyboard(user_id))
+            await send_message(user_id, "❌ У вас нет оружия — охотиться нельзя.", create_main_menu_keyboard(user_id))
             return
         if p.get("weapon_durability", 0) <= 0:
-        await send_message(user_id, "🔧 Ваше оружие полностью сломано — сначала почините его.", create_main_menu_keyboard(user_id))
+            await send_message(user_id, "🔧 Ваше оружие полностью сломано — сначала почините его.", create_main_menu_keyboard(user_id))
             return
         if p["stamina"] <= 0:
-        await send_message(user_id, "😴 У вас закончилась выносливость — пора отдохнуть.", create_main_menu_keyboard(user_id))
+            await send_message(user_id, "😴 У вас закончилась выносливость — пора отдохнуть.", create_main_menu_keyboard(user_id))
             return
         await send_message(user_id, "🔍 Исследование...", create_empty_keyboard())
         add_territory_exhaustion(location, point)
-        increment_emission(vk_session)
+        await increment_emission()
         p["stamina"] = max(0, p["stamina"] - 1)
         p["hunger"] = min(10, p["hunger"] + 0.5)
         status_messages = []
@@ -1369,7 +1565,7 @@ async def handle_exploration(user_id):
             p["state"] = STATE_IN_MENU
             normalize_stats(user_id)
             save_data()
-        await send_message(user_id, death_msg, create_main_menu_keyboard(user_id))
+            await send_message(user_id, death_msg, create_main_menu_keyboard(user_id))
             return
         loc = p["location"]
         mutant = select_mutant(loc, point)
@@ -1377,7 +1573,7 @@ async def handle_exploration(user_id):
             msg = "❌ В этом логове пусто..."
             if status_messages:
                 msg = "\n".join(status_messages) + "\n\n" + msg
-        await send_message(user_id, msg, create_main_menu_keyboard(user_id))
+            await send_message(user_id, msg, create_main_menu_keyboard(user_id))
             return
         p["current_mutant"] = mutant
         p["mutant_hp"] = mutant["hp"]
@@ -1390,20 +1586,13 @@ async def handle_exploration(user_id):
         p["valid_targets"] = valid_targets
         p["state"] = STATE_HUNTING
         save_data()
+        attachment = None
         try:
-            upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
             img_path = f"mutants/{mutant['name'].lower().replace(' ', '_').replace('ё', 'е')}.png"
             if os.path.exists(img_path):
-                with open(img_path, "rb") as f:
-                    response = vk_session.http.post(upload_url, files={"photo": f})
-                    result = response.json()
-                    photo_data = vk_session.method("photos.saveMessagesPhoto", {"photo": result["photo"], "server": result["server"], "hash": result["hash"]})[0]
-                    attachment = f"photo{photo_data['owner_id']}_{photo_data['id']}"
-            else:
-                attachment = None
+                attachment = await photo_uploader.upload(img_path, peer_id=user_id)
         except Exception as e:
             logger.error(f"Ошибка загрузки изображения мутанта: {e}")
-            attachment = None
         accuracy = get_total_weapon_accuracy(user_id)
         weapon_damage = get_total_weapon_damage(user_id)
         weapon_durability = p.get("weapon_durability", 0)
@@ -1429,25 +1618,19 @@ async def handle_exploration(user_id):
         msg_parts.append(f"🔧🦺 Броня: {armor_durability}/{armor_max_durability}")
         msg = "\n".join(msg_parts)
         keyboard = create_hunting_keyboard()
-        params = {"user_id":user_id, message=msg, "random_id":random.randint(1, 2**31), keyboard=keyboard.get_keyboard()}
-        if attachment:
-            params["attachment"] = attachment
-        await api.messages.send(
-            user_id=params.get("user_id") or user_id,
-            peer_id=params.get("peer_id"),
-            message=params.get("message", ""),
-            attachment=params.get("attachment"),
-            keyboard=params.get("keyboard"),
-            random_id=params.get("random_id", random.randint(1, 2**31))
-        )
+        try:
+            await bot.api.messages.send(user_id=user_id, message=msg, random_id=0, keyboard=keyboard.get_json(), attachment=attachment if attachment else None)
+        except Exception as e:
+            logger.error(f"Ошибка отправки: {e}")
+            await send_message(user_id, msg, keyboard)
         return
     ok, msg = check_vital_conditions(user_id, "исследование")
     if not ok:
         await send_message(user_id, msg, create_main_menu_keyboard(user_id))
         return
-        await send_message(user_id, "🔍 Исследование...", create_empty_keyboard())
+    await send_message(user_id, "🔍 Исследование...", create_empty_keyboard())
     add_territory_exhaustion(location, point)
-    increment_emission(vk_session)
+    await increment_emission()
     p["stamina"] = max(0, p["stamina"] - 1)
     p["hunger"] = min(10, p["hunger"] + 0.5)
     radiation_gain = get_radiation_gain(ptype)
@@ -1504,87 +1687,551 @@ async def handle_exploration(user_id):
     if not drops and not result_lines:
         result_lines.append("🔍 Вам не выпало ничего.")
     save_data()
-        await send_message(user_id, "\n".join(result_lines), create_main_menu_keyboard(user_id))
-def init_territory_exhaustion():
-    global territory_exhaustion
-    territory_exhaustion = {}
-    for loc in LOCATIONS:
-        territory_exhaustion[loc] = {}
-        for point in LOCATIONS[loc]:
-            territory_exhaustion[loc][point] = 0
+    await send_message(user_id, "\n".join(result_lines), create_main_menu_keyboard(user_id))
+def init_anomaly_exploration(user_id):
+    p = players[user_id]
+    location = p["location"]
+    point = p["point"]
+    atype = ANOMALY_ZONES.get(location, {}).get(point, "грави")
+    p["current_anomaly_type"] = atype
+    p["state"] = STATE_ANOMALY_EXPLORE
+    if random.randint(1, 100) <= 70:
+        safe_path = random.randint(1, 3)
+        p["anomaly_safe_path"] = safe_path
+        p["anomaly_path_choosing"] = True
+    else:
+        p["anomaly_path_choosing"] = False
+        p["anomaly_safe_path"] = None
+        start_anomaly_map(user_id)
     save_data()
-def init_last_stand_mode():
-    global players, factions, territory_control, territory_exhaustion, emission_counter
-    global last_restored_categories, faction_shared_squads, LAST_STAND_MODE
-    global faction_warehouses, faction_warehouse_money, zombie_bot
-    LAST_STAND_MODE = True
-    territory_control = {}
-    territory_exhaustion = {}
-    emission_counter = 0
-    last_restored_categories = []
-    faction_shared_squads = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ Одиночки": 0, ZOMBIE_FACTION: 0}
-    faction_warehouses = {"🛡️ Долг": {}, "☦️ Грех": {}, "☢️ Одиночки": {}, ZOMBIE_FACTION: {}}
-    faction_warehouse_money = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ Одиночки": 0, ZOMBIE_FACTION: 0}
-    zombie_bot = {"money": 0, "squads": 0, "food_units": 0, "med_units": 0, "rad_units": 0, "last_action_time": 0, "next_action": "", "backpack": {}, "mode": "normal", "priority_target": None, "agro_points": [], "last_attacked_by": None, "pending_target": None, "last_logs": [], "bonus_squads": 0}
-    for loc in LOCATIONS:
-        territory_control[loc] = {}
-        territory_exhaustion[loc] = {}
-        for point in LOCATIONS[loc]:
-            territory_control[loc][point] = {"faction": None, "squads": 0}
-            territory_exhaustion[loc][point] = 0
-    territory_control["Кордон"]["Б1"] = {"faction": "🛡️ Долг", "squads": 5}
-    territory_control["Кордон"]["Б2"] = {"faction": "☢️ Одиночки", "squads": 5}
-    territory_control["Кордон"]["Б3"] = {"faction": "☦️ Грех", "squads": 5}
-    territory_control["Свалка"]["Б1"] = {"faction": ZOMBIE_FACTION, "squads": 5}
-    territory_control["Поляна"]["Б1"] = {"faction": ZOMBIE_FACTION, "squads": 5}
-    territory_control["Тёмная долина"]["Б3"] = {"faction": ZOMBIE_FACTION, "squads": 5}
-    for uid, p in players.items():
-        faction = p.get("faction")
-        if faction and faction in LAST_STAND_START_POSITIONS and faction != ZOMBIE_FACTION:
-            start_loc, start_point = LAST_STAND_START_POSITIONS[faction]
-            p["location"] = start_loc
-            p["point"] = start_point
+def start_anomaly_map(user_id):
+    p = players[user_id]
+    player_start = (random.randint(0, 5), random.randint(0, 5))
+    p["player_pos"] = player_start
+    num_artifacts = random.randint(1, 3)
+    num_anomalies = random.randint(3, 6)
+    num_hidden_anomalies = random.randint(0, 2)
+    occupied = {player_start}
+    artifact_positions = []
+    for _ in range(num_artifacts):
+        attempts = 0
+        while attempts < 50:
+            pos = (random.randint(0, 5), random.randint(0, 5))
+            if pos not in occupied:
+                artifact_positions.append(pos)
+                occupied.add(pos)
+                break
+            attempts += 1
+    anomaly_positions = []
+    for _ in range(num_anomalies):
+        attempts = 0
+        while attempts < 50:
+            pos = (random.randint(0, 5), random.randint(0, 5))
+            if pos not in occupied:
+                anomaly_positions.append(pos)
+                occupied.add(pos)
+                break
+            attempts += 1
+    hidden_anomaly_positions = []
+    for _ in range(num_hidden_anomalies):
+        attempts = 0
+        while attempts < 50:
+            pos = (random.randint(0, 5), random.randint(0, 5))
+            if pos not in occupied:
+                hidden_anomaly_positions.append(pos)
+                occupied.add(pos)
+                break
+            attempts += 1
+    p["artifact_positions"] = artifact_positions
+    p["anomaly_positions"] = anomaly_positions
+    p["hidden_anomaly_positions"] = hidden_anomaly_positions
+    p["anomaly_path_choosing"] = False
+    p["anomaly_safe_path"] = None
+def get_detector_alerts(user_id):
+    p = players[user_id]
+    detector = p.get("detector", None)
+    px, py = p.get("player_pos", (0, 0))
+    artifact_positions = [tuple(pos) for pos in p.get("artifact_positions", [])]
+    anomaly_positions = [tuple(pos) for pos in p.get("anomaly_positions", [])]
+    alerts = []
+    if detector in ["Медведь", "Велес", "Сварог"]:
+        anomaly_dirs = []
+        for ax, ay in anomaly_positions:
+            if abs(ax - px) <= 1 and abs(ay - py) <= 1 and (ax, ay) != (px, py):
+                direction = ""
+                if ay < py:
+                    direction += "⬆️"
+                if ay > py:
+                    direction += "⬇️"
+                if ax < px:
+                    direction += "⬅️"
+                if ax > px:
+                    direction += "➡️"
+                if direction and direction not in anomaly_dirs:
+                    anomaly_dirs.append(direction)
+        if anomaly_dirs:
+            alerts.append("🚨" + "|".join(anomaly_dirs))
+    if detector == "Отклик":
+        for ax, ay in artifact_positions:
+            if abs(ax - px) <= 1 and abs(ay - py) <= 1 and (ax, ay) != (px, py):
+                alerts.append("✴️✴️✴️")
+                break
+    elif detector == "Медведь":
+        for ax, ay in artifact_positions:
+            dist = max(abs(ax - px), abs(ay - py))
+            if dist == 1:
+                alerts.append("✴️✴️✴️")
+                break
+            elif dist == 2:
+                alerts.append("✴️✴️")
+                break
+    return " ".join(alerts)
+def generate_anomaly_map_image(user_id):
+    p = players[user_id]
+    player_pos = tuple(p.get("player_pos", (0, 0)))
+    artifact_positions = [tuple(pos) for pos in p.get("artifact_positions", [])]
+    anomaly_positions = [tuple(pos) for pos in p.get("anomaly_positions", [])]
+    detector = p.get("detector", None)
+    cell_size = 60
+    grid_size = 6
+    width = cell_size * grid_size
+    height = cell_size * grid_size
+    try:
+        bg = Image.open("backgrounds/background.png").convert("RGBA").resize((width, height))
+        enhancer = ImageEnhance.Brightness(bg)
+        bg = enhancer.enhance(0.75)
+    except:
+        bg = Image.new("RGBA", (width, height), (40, 40, 40, 255))
+    img = bg.copy()
+    draw = ImageDraw.Draw(img)
+    for row in range(grid_size):
+        for col in range(grid_size):
+            x = col * cell_size
+            y = row * cell_size
+            draw.rectangle([x, y, x + cell_size, y + cell_size], outline="black", width=2)
+    icon_size = cell_size - 10
+    try:
+        player_icon = Image.open("backgrounds/игрок.png").convert("RGBA").resize((icon_size, icon_size))
+    except:
+        player_icon = None
+    try:
+        artifact_icon = Image.open("backgrounds/арт.png").convert("RGBA").resize((icon_size, icon_size))
+    except:
+        artifact_icon = None
+    try:
+        anomaly_icon = Image.open("backgrounds/аном.png").convert("RGBA").resize((icon_size, icon_size))
+    except:
+        anomaly_icon = None
+    px, py = player_pos
+    if detector in ["Велес", "Сварог"]:
+        for ax, ay in artifact_positions:
+            if abs(ax - px) <= 4 and abs(ay - py) <= 4:
+                x = ax * cell_size + 5
+                y = ay * cell_size + 5
+                if artifact_icon:
+                    img.paste(artifact_icon, (x, y), artifact_icon)
+                else:
+                    draw.ellipse([x, y, x + icon_size, y + icon_size], fill="yellow", outline="orange")
+    if detector == "Сварог":
+        for ax, ay in anomaly_positions:
+            if abs(ax - px) <= 4 and abs(ay - py) <= 4:
+                x = ax * cell_size + 5
+                y = ay * cell_size + 5
+                if anomaly_icon:
+                    img.paste(anomaly_icon, (x, y), anomaly_icon)
+                else:
+                    draw.ellipse([x, y, x + icon_size, y + icon_size], fill="cyan", outline="blue")
+    x = px * cell_size + 5
+    y = py * cell_size + 5
+    if player_icon:
+        img.paste(player_icon, (x, y), player_icon)
+    else:
+        draw.ellipse([x, y, x + icon_size, y + icon_size], fill="white", outline="gray")
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
+async def handle_anomaly_move(user_id, direction):
+    p = players[user_id]
+    px, py = p.get("player_pos", (0, 0))
+    if direction == "⬆️" and py > 0:
+        py -= 1
+    elif direction == "⬇️" and py < 5:
+        py += 1
+    elif direction == "⬅️" and px > 0:
+        px -= 1
+    elif direction == "➡️" and px < 5:
+        px += 1
+    else:
+        await send_message(user_id, "❌ Нельзя двигаться в этом направлении.", create_anomaly_movement_keyboard())
+        return
+    p["player_pos"] = (px, py)
+    messages = []
+    artifact_positions = [tuple(pos) for pos in p.get("artifact_positions", [])]
+    anomaly_positions = [tuple(pos) for pos in p.get("anomaly_positions", [])]
+    hidden_anomaly_positions = [tuple(pos) for pos in p.get("hidden_anomaly_positions", [])]
+    if (px, py) in artifact_positions:
+        atype = p.get("current_anomaly_type", "грави")
+        found_artifact = get_random_artifact_by_rarity(atype)
+        p["backpack"][found_artifact] = p["backpack"].get(found_artifact, 0) + 1
+        artifact_positions.remove((px, py))
+        p["artifact_positions"] = artifact_positions
+        detector = p.get("detector", "Отклик")
+        if detector == "Велес":
+            charge_cost = 2
+        elif detector == "Сварог":
+            charge_cost = 3
+        else:
+            charge_cost = 1
+        p["detector_charge"] = max(0, p.get("detector_charge", 0) - charge_cost)
+        messages.append(f"🌕 Вы нашли артефакт: {found_artifact}!")
+        messages.append(f"📟 Детектор разрядился на {charge_cost} заряд(а).")
+        if not artifact_positions:
+            messages.append("✅ Все артефакты в этой зоне найдены!")
             p["state"] = STATE_IN_MENU
-            p["transition_end_time"] = None
-    save_data()
-def init_last_stand_mode_v2():
-    global players, factions, territory_control, territory_exhaustion, emission_counter
-    global last_restored_categories, faction_shared_squads, LAST_STAND_MODE
-    global faction_warehouses, faction_warehouse_money, zombie_bot
-    LAST_STAND_MODE = True
-    territory_control = {}
-    territory_exhaustion = {}
-    emission_counter = 0
-    last_restored_categories = []
-    faction_shared_squads = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ Одиночки": 0, ZOMBIE_FACTION: 0}
-    faction_warehouses = {"🛡️ Долг": {}, "☦️ Грех": {}, "☢️ Одиночки": {}, ZOMBIE_FACTION: {}}
-    faction_warehouse_money = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ Одиночки": 0, ZOMBIE_FACTION: 0}
-    zombie_bot = {"money": 0, "squads": 85, "food_units": 0, "med_units": 0, "rad_units": 0, "last_action_time": time.time(), "next_action": "лутание", "backpack": {}, "mode": "normal", "priority_target": None, "agro_points": [], "last_attacked_by": None, "pending_target": None, "last_logs": [], "bonus_squads": 85}
-    for loc in LOCATIONS:
-        territory_control[loc] = {}
-        territory_exhaustion[loc] = {}
-        for point in LOCATIONS[loc]:
-            territory_control[loc][point] = {"faction": None, "squads": 0}
-            territory_exhaustion[loc][point] = 0
-    territory_control["Кордон"]["Б1"] = {"faction": "🛡️ Долг", "squads": 5}
-    territory_control["Свалка"]["Б1"] = {"faction": "☢️ Одиночки", "squads": 5}
-    territory_control["Тёмная долина"]["Б1"] = {"faction": "☦️ Грех", "squads": 5}
-    territory_control["Поляна"]["Б1"] = {"faction": ZOMBIE_FACTION, "squads": 5}
-    for uid, p in players.items():
-        faction = p.get("faction")
-        if faction == "🛡️ Долг":
-            p["location"] = "Кордон"
-            p["point"] = "Б1"
-        elif faction == "☢️ Одиночки":
-            p["location"] = "Свалка"
-            p["point"] = "Б1"
-        elif faction == "☦️ Грех":
-            p["location"] = "Тёмная долина"
-            p["point"] = "Б1"
-        if faction and faction != ZOMBIE_FACTION:
+            save_data()
+            await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
+            return
+        min_charge = 2 if detector == "Велес" else (3 if detector == "Сварог" else 1)
+        if p["detector_charge"] < min_charge:
+            messages.append(f"🔋 Заряда детектора недостаточно для продолжения поиска! Вы покидаете аномальную зону.")
             p["state"] = STATE_IN_MENU
-            p["transition_end_time"] = None
+            save_data()
+            await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
+            return
+    if (px, py) in hidden_anomaly_positions:
+        atype = p.get("current_anomaly_type", "грави")
+        min_dmg, max_dmg = ANOMALY_DAMAGE[atype]
+        raw_damage = round(random.uniform(min_dmg, max_dmg), 1)
+        anomaly_resist = get_total_anomaly_resist(user_id)
+        actual_damage = max(0, round(raw_damage - anomaly_resist, 1))
+        p["health"] = max(0, p["health"] - actual_damage)
+        messages.append(f"💥 Вы попали в тайную аномалию! Получено {actual_damage} урона. (❤️ {p['health']}/10)")
+        hidden_anomaly_positions.remove((px, py))
+        p["hidden_anomaly_positions"] = hidden_anomaly_positions
+        if random.randint(1, 100) <= 25 and p.get("armor"):
+            p["armor_durability"] = max(0, p["armor_durability"] - 1)
+            messages.append("🔧 Броня повреждена (-1)!")
+        if p["health"] <= 0:
+            messages.append("💀 Вы погибли в аномалии!")
+            lost_items, money_lost = calculate_and_apply_death_losses(user_id, max_items=5, max_money=50)
+            messages.extend(format_death_losses(lost_items, money_lost))
+            p["state"] = STATE_IN_MENU
+            p["death_notified"] = True
+            normalize_stats(user_id)
+            save_data()
+            await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
+            return
+    if (px, py) in anomaly_positions:
+        atype = p.get("current_anomaly_type", "грави")
+        min_dmg, max_dmg = ANOMALY_DAMAGE[atype]
+        raw_damage = round(random.uniform(min_dmg, max_dmg), 1)
+        anomaly_resist = get_total_anomaly_resist(user_id)
+        actual_damage = max(0, round(raw_damage - anomaly_resist, 1))
+        p["health"] = max(0, p["health"] - actual_damage)
+        messages.append(f"💥 Вы попали в аномалию! Получено {actual_damage} урона. (❤️ {p['health']}/10)")
+        if random.randint(1, 100) <= 25 and p.get("armor"):
+            p["armor_durability"] = max(0, p["armor_durability"] - 1)
+            messages.append("🔧 Броня повреждена (-1)!")
+        if p["health"] <= 0:
+            messages.append("💀 Вы погибли в аномалии!")
+            lost_items, money_lost = calculate_and_apply_death_losses(user_id, max_items=5, max_money=50)
+            messages.extend(format_death_losses(lost_items, money_lost))
+            p["state"] = STATE_IN_MENU
+            p["death_notified"] = True
+            normalize_stats(user_id)
+            save_data()
+            await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
+            return
+    alerts = get_detector_alerts(user_id)
+    if alerts:
+        messages.append(alerts)
     save_data()
+    try:
+        img_buffer = generate_anomaly_map_image(user_id)
+        msg = "\n".join(messages) if messages else "Вы переместились."
+        await send_photo_message(user_id, img_buffer, msg, create_anomaly_movement_keyboard())
+    except Exception as e:
+        logger.error(f"Ошибка генерации карты: {e}")
+        await send_message(user_id, "\n".join(messages) if messages else "Вы переместились.", create_anomaly_movement_keyboard())
+def generate_war_map_image(location):
+    map_path = LOCATION_MAPS.get(location)
+    if not map_path or not os.path.exists(map_path):
+        return None
+    try:
+        img = Image.open(map_path).convert("RGBA")
+        draw = ImageDraw.Draw(img)
+        icon_size = 45 if location == "Поляна" else 30
+        faction_icons = {}
+        for faction, icon_path in FACTION_ICONS.items():
+            try:
+                faction_icons[faction] = Image.open(icon_path).convert("RGBA").resize((icon_size, icon_size))
+            except:
+                faction_icons[faction] = None
+        if location in POINT_COORDINATES:
+            for point, (x, y) in POINT_COORDINATES[location].items():
+                owner = get_territory_owner(location, point)
+                if owner and owner in faction_icons and faction_icons[owner]:
+                    icon = faction_icons[owner]
+                    img.paste(icon, (x - icon_size // 2, y - icon_size // 2), icon)
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        logger.error(f"Ошибка генерации карты войны: {e}")
+        return None
+async def send_war_map(user_id, location, message, keyboard):
+    try:
+        img_buffer = generate_war_map_image(location)
+        if img_buffer:
+            await send_photo_message(user_id, img_buffer, message, keyboard)
+            return True
+    except Exception as e:
+        logger.error(f"Ошибка отправки карты войны: {e}")
+    await send_message(user_id, message, keyboard)
+    return False
+async def send_location_map(user_id, location):
+    try:
+        img_buffer = generate_war_map_image(location)
+        if img_buffer:
+            current_point = players[user_id]["point"]
+            await send_photo_message(user_id, img_buffer, f"🗺️ Карта локации: {location}\n📍 Ваша точка: {current_point}\n\n🌐 Впишите название точки на карте, на которую собираетесь перейти:\n❕ Пример: \"ТР1\", \"Б1\".")
+            return True
+    except Exception as e:
+        logger.error(f"Ошибка отправки карты: {e}")
+    await send_message(user_id, '🌐 Впишите название точки на карте, на которую собираетесь перейти:\n❕ Пример: "ТР1", "Б1".')
+    return False
+async def handle_hunting_escape(user_id):
+    p = players[user_id]
+    lost_items, money_lost = calculate_and_apply_death_losses(user_id, max_items=5, max_money=50)
+    msg_lines = ["💨 Вы сбежали с охоты!"]
+    msg_lines.extend(format_death_losses(lost_items, money_lost))
+    await send_message(user_id, "\n".join(msg_lines), create_main_menu_keyboard(user_id))
+    p["state"] = STATE_IN_MENU
+    p.pop("current_mutant", None)
+    p.pop("mutant_hp", None)
+    save_data()
+async def process_attack(attacker_id, location, point, squad_count, with_player):
+    attacker = players[attacker_id]
+    attacker_faction = attacker["faction"]
+    defender_faction = get_territory_owner(location, point)
+    if defender_faction == ZOMBIE_FACTION and LAST_STAND_MODE:
+        await zombie_territory_attacked(location, point, attacker_faction)
+    defender_squads = get_territory_squads(location, point)
+    ptype = POINT_TYPES.get(point, "Территория")
+    min_squads = MIN_SQUADS_FOR_POINT.get(ptype, 1)
+    if defender_faction is not None and defender_faction != attacker_faction:
+        if squad_count < min_squads:
+            return f"❌ Для атаки на {ptype} нужно минимум {min_squads} сквадов."
+    async def notify_faction_leader(faction, message):
+        leader = get_faction_leader(faction)
+        if leader and leader in players and leader != attacker_id:
+            await send_message(leader, message)
+    async def damage_equipment(player_id, messages_list):
+        p = players[player_id]
+        if random.randint(1, 100) <= 50:
+            equip_to_damage = []
+            if p.get("weapon") and p.get("weapon_durability", 0) > 0:
+                equip_to_damage.append("weapon")
+            if p.get("armor") and p.get("armor_durability", 0) > 0:
+                equip_to_damage.append("armor")
+            if equip_to_damage:
+                target = random.choice(equip_to_damage)
+                if target == "weapon":
+                    p["weapon_durability"] = max(0, p["weapon_durability"] - 1)
+                    if player_id == attacker_id:
+                        messages_list.append("🔧 Ваше оружие повреждено (-1)!")
+                    else:
+                        await send_message(player_id, "🔧 Ваше оружие повреждено в бою (-1)!")
+                else:
+                    p["armor_durability"] = max(0, p["armor_durability"] - 1)
+                    if player_id == attacker_id:
+                        messages_list.append("🔧 Ваша броня повреждена (-1)!")
+                    else:
+                        await send_message(player_id, "🔧 Ваша броня повреждена в бою (-1)!")
+    if defender_faction is None:
+        if squad_count >= min_squads:
+            set_territory_control(location, point, attacker_faction, squad_count)
+            attacker["squads"] -= squad_count
+            save_data()
+            return f"✅ Территория {location} {point} захвачена! Размещено {squad_count} сквадов."
+        else:
+            return f"❌ Недостаточно сквадов для захвата. Нужно минимум {min_squads}."
+    if defender_faction == attacker_faction:
+        territory_control[location][point]["squads"] += squad_count
+        attacker["squads"] -= squad_count
+        save_data()
+        return f"✅ Подкрепление отправлено. На точке теперь {territory_control[location][point]['squads']} сквадов."
+    if with_player:
+        if not attacker.get("weapon") or attacker.get("health", 0) <= 0:
+            return "❌ Для личного участия нужно оружие и здоровье."
+    await notify_faction_leader(defender_faction, f"⚠️ Территория {location} {point} атакована группировкой {attacker_faction}!")
+    all_on_territory = get_players_on_territory(location, point)
+    defenders = [uid for uid in all_on_territory if players[uid].get("faction") == defender_faction and players[uid].get("health", 0) > 0]
+    total_bullet_resist = sum(get_player_bullet_resist(uid) for uid in defenders)
+    player_damage = 0
+    bonus_msg_parts = []
+    if with_player:
+        player_damage = attacker.get("weapon_damage", 0) + get_belt_bonus(attacker_id, "weapon_damage")
+        weapon_name = attacker.get("weapon", "")
+        special = SPECIAL_WEAPONS.get(weapon_name, {})
+        if ptype in ["Аномальная зона", "Логово"]:
+            war_chance = special.get("war_bonus_chance", 0)
+            war_bonus = special.get("war_bonus_damage", 0)
+            if war_chance > 0 and random.randint(1, 100) <= war_chance:
+                player_damage += war_bonus
+                bonus_msg_parts.append(f"⚡ {weapon_name}: +{war_bonus} урона!")
+    defender_damage_to_attacker = squad_count / 2
+    if with_player:
+        defender_damage_to_attacker += player_damage
+    def calculate_return_damage_to_player():
+        squad_damage = round(defender_squads / 3)
+        armor_cat = get_armor_category(attacker_id)
+        armor_damage = [1, 1.5, 2, 2.5, 3, 3.5][min(armor_cat, 5)]
+        return squad_damage + armor_damage
+    effective_defender_squads = max(0, defender_squads - total_bullet_resist)
+    remaining_defender_after_player = max(0, effective_defender_squads - player_damage) if with_player else effective_defender_squads
+    global faction_shared_squads
+    if squad_count <= remaining_defender_after_player:
+        squads_destroyed = squad_count
+        remaining_defender_squads = remaining_defender_after_player - squad_count
+        territory_control[location][point]["squads"] = remaining_defender_squads
+        if remaining_defender_squads == 0:
+            set_territory_control(location, point, None, 0)
+            await notify_faction_leader(defender_faction, f"⚠️ Территория {location} {point} потеряна — не осталось сквадов!")
+        elif remaining_defender_squads < min_squads:
+            faction_shared_squads[defender_faction] = faction_shared_squads.get(defender_faction, 0) + remaining_defender_squads
+            set_territory_control(location, point, None, 0)
+            await notify_faction_leader(defender_faction, f"⚠️ Территория {location} {point} потеряна!\n🔙 {remaining_defender_squads} сквадов вернулось в общее хранилище.")
+        if defenders:
+            damage_per_player = defender_damage_to_attacker / len(defenders)
+            for def_id in defenders:
+                players[def_id]["health"] = max(0, players[def_id]["health"] - damage_per_player)
+                await damage_equipment(def_id, bonus_msg_parts)
+                await send_message(def_id, f"⚔️ Атака на {location} {point} отбита.")
+                if players[def_id]["health"] <= 0:
+                    await handle_war_death(def_id, attacker_id)
+        if with_player:
+            return_damage = calculate_return_damage_to_player()
+            attacker["health"] = max(0, attacker["health"] - return_damage)
+            bonus_msg_parts.append(f"💔 Вы получили {return_damage} урона.")
+            await damage_equipment(attacker_id, bonus_msg_parts)
+            if attacker["health"] <= 0:
+                await handle_war_death(attacker_id, defenders[0] if defenders else None)
+        attacker["squads"] -= squad_count
+        save_data()
+        bonus_msg = "\n" + "\n".join(bonus_msg_parts) if bonus_msg_parts else ""
+        return f"❌ Атака отбита. Потеряно {squads_destroyed} сквадов.{bonus_msg}"
+    remaining_attacker_squads = squad_count - remaining_defender_after_player
+    if defenders:
+        damage_per_player = defender_damage_to_attacker / len(defenders)
+        for def_id in defenders:
+            players[def_id]["health"] = max(0, players[def_id]["health"] - damage_per_player)
+            await damage_equipment(def_id, bonus_msg_parts)
+            await send_message(def_id, f"⚔️ Территория {location} {point} потеряна.")
+            if players[def_id]["health"] <= 0:
+                await handle_war_death(def_id, attacker_id)
+    if with_player:
+        return_damage = calculate_return_damage_to_player()
+        attacker["health"] = max(0, attacker["health"] - return_damage)
+        bonus_msg_parts.append(f"💔 Вы получили {return_damage} урона.")
+        await damage_equipment(attacker_id, bonus_msg_parts)
+        if attacker["health"] <= 0:
+            await handle_war_death(attacker_id, defenders[0] if defenders else None)
+            attacker["squads"] -= squad_count
+            save_data()
+            bonus_msg = "\n" + "\n".join(bonus_msg_parts) if bonus_msg_parts else ""
+            return f"💀 Вы погибли в бою.{bonus_msg}"
+    squads_lost = squad_count - remaining_attacker_squads
+    bonus_msg_parts.append(f"💀 Потеряно сквадов: {squads_lost}")
+    if remaining_attacker_squads >= min_squads:
+        set_territory_control(location, point, attacker_faction, remaining_attacker_squads)
+        attacker["squads"] -= squad_count
+        await notify_faction_leader(defender_faction, f"💀 Территория {location} {point} захвачена {attacker_faction}!")
+        save_data()
+        bonus_msg = "\n" + "\n".join(bonus_msg_parts) if bonus_msg_parts else ""
+        return f"✅ Территория {location} {point} захвачена! Размещено {remaining_attacker_squads} сквадов.{bonus_msg}"
+    else:
+        set_territory_control(location, point, None, 0)
+        attacker["squads"] -= squad_count
+        attacker["squads"] += remaining_attacker_squads
+        await notify_faction_leader(defender_faction, f"⚠️ Территория {location} {point} потеряна!")
+        save_data()
+        bonus_msg = "\n" + "\n".join(bonus_msg_parts) if bonus_msg_parts else ""
+        return f"⚠️ Территория освобождена, но недостаточно сквадов для удержания (нужно {min_squads}).\n🔙 {remaining_attacker_squads} сквадов вернулось к вам.{bonus_msg}"
+async def handle_war_death(dead_id, killer_id):
+    dead = players[dead_id]
+    dead_faction = dead.get("faction")
+    backpack = dead.get("backpack", {})
+    money = dead.get("money", 0)
+    lost_items = {}
+    lootable_items = []
+    for item, count in list(backpack.items()):
+        if count > 0 and item not in DONATION_ARTIFACTS:
+            lootable_items.extend([item] * count)
+    total_lootable = len(lootable_items)
+    if total_lootable > 0:
+        max_items_to_lose = max(1, int(total_lootable * 0.15))
+        num_items_to_lose = random.randint(1, max_items_to_lose)
+        random.shuffle(lootable_items)
+        lost_list = lootable_items[:num_items_to_lose]
+        for item in lost_list:
+            lost_items[item] = lost_items.get(item, 0) + 1
+        for item, count in lost_items.items():
+            backpack[item] -= count
+            if backpack[item] <= 0:
+                del backpack[item]
+    max_money_to_lose = max(1, int(money * 0.15))
+    money_lost = random.randint(1, max_money_to_lose) if money > 0 else 0
+    dead["money"] -= money_lost
+    dead["health"] = 0
+    dead["death_notified"] = True
+    if killer_id and killer_id in players and dead_faction != ZOMBIE_FACTION:
+        killer = players[killer_id]
+        for item, count in lost_items.items():
+            killer["backpack"][item] = killer["backpack"].get(item, 0) + count
+        killer["money"] = killer.get("money", 0) + money_lost
+        loot_msg = f"💀 Вы убили врага в бою!"
+        if lost_items or money_lost:
+            loot_msg += "\nПолучено:"
+            for item, count in lost_items.items():
+                loot_msg += f"\n  {item} x{count}"
+            if money_lost > 0:
+                loot_msg += f"\n  💲 {money_lost}р"
+        await send_message(killer_id, loot_msg)
+    msg_lines = ["💀 Вы погибли в бою!"]
+    if lost_items or money_lost:
+        msg_lines.append("Потеряно:")
+        for item, count in lost_items.items():
+            msg_lines.append(f"  {item} x{count}")
+        if money_lost > 0:
+            msg_lines.append(f"  💲 {money_lost}р")
+    await send_message(dead_id, "\n".join(msg_lines), create_main_menu_keyboard(dead_id))
+    save_data()
+async def zombie_territory_attacked(location, point, attacker_faction):
+    global zombie_bot
+    agro_entry = {"loc": location, "point": point, "attacker": attacker_faction, "time": time.time(), "reinforced": False}
+    agro_points = zombie_bot.get("agro_points", [])
+    exists = False
+    for i, ap in enumerate(agro_points):
+        if isinstance(ap, dict) and ap.get("loc") == location and ap.get("point") == point:
+            agro_points[i] = agro_entry
+            exists = True
+            break
+        elif isinstance(ap, tuple) and ap[0] == location and ap[1] == point:
+            agro_points[i] = agro_entry
+            exists = True
+            break
+    if not exists:
+        agro_points.append(agro_entry)
+    zombie_bot["agro_points"] = agro_points
+    zombie_bot["last_attacked_by"] = attacker_faction
+    save_data()
+    try:
+        await send_message(353430025, f"🚨 АГРО! {attacker_faction} атаковал {location} {point}!")
+    except:
+        pass
 def get_zombie_controlled_locations():
     controlled = []
     for loc in LOCATIONS:
@@ -1612,13 +2259,13 @@ def get_zombie_available_targets():
                 targets.append({"loc": loc, "point": point, "owner": owner, "squads": enemy_squads, "type": ptype})
     random.shuffle(targets)
     return targets
-def zombie_loot_territory(loc, point):
+def zombie_loot_territory_custom(loc, point, times):
     global zombie_bot, emission_counter
     ptype = POINT_TYPES.get(point, "Территория")
     logs = []
     total_money = 0
     total_items = {}
-    for _ in range(10):
+    for _ in range(times):
         if not check_territory_exhaustion(loc, point):
             break
         add_territory_exhaustion(loc, point)
@@ -1649,10 +2296,8 @@ def zombie_loot_territory(loc, point):
         zombie_bot["backpack"][item] = zombie_bot["backpack"].get(item, 0) + amount
     logs.append(f"📍 {loc} {point}: 💲{total_money}р")
     if total_items:
-        items_str = ", ".join([f"{k} x{v}" for k, v in total_items.items()])
+        items_str = ", ".join([f"{k} x{v}" for k, v in list(total_items.items())[:5]])
         logs.append(f"   📦 {items_str}")
-    if emission_counter >= EMISSION_MAX:
-        trigger_emission(vk_session)
     save_data()
     return logs
 def zombie_convert_items():
@@ -1773,10 +2418,8 @@ def zombie_choose_target():
     for ap in agro_points:
         if isinstance(ap, tuple):
             loc, point = ap[0], ap[1]
-            attacker = None
         else:
             loc, point = ap["loc"], ap["point"]
-            attacker = ap.get("attacker")
         owner = get_territory_owner(loc, point)
         if owner != ZOMBIE_FACTION:
             enemy_squads = get_territory_squads(loc, point)
@@ -1872,7 +2515,7 @@ def zombie_choose_target():
     else:
         zombie_bot["pending_target"] = (loc, point, squads_needed)
         return None, None, 0
-def zombie_attack(loc, point, squad_count):
+async def zombie_attack(loc, point, squad_count):
     global zombie_bot, territory_control
     logs = []
     owner = get_territory_owner(loc, point)
@@ -1887,7 +2530,7 @@ def zombie_attack(loc, point, squad_count):
         zombie_bot["squads"] -= squad_count
         logs.append(f"✅ Захвачено: {loc} {point} ({squad_count} сквадов)")
         try:
-            await api.messages.send( {"peer_id": GAME_CHAT_ID, "message": f"🧟 Зомбированные захватили {loc} {point}!", random_id=random.randint(1, 2**31)})
+            await bot.api.messages.send(peer_id=GAME_CHAT_ID, message=f"🧟 Зомбированные захватили {loc} {point}!", random_id=0)
         except:
             pass
         save_data()
@@ -1895,7 +2538,7 @@ def zombie_attack(loc, point, squad_count):
     if owner and owner != ZOMBIE_FACTION:
         leader = get_faction_leader(owner)
         if leader and leader in players:
-            await send_message(leader, f"⚠️ Зомбированные атакуют {loc} {point} силами {squad_count} сквадов!", None)
+            await send_message(leader, f"⚠️ Зомбированные атакуют {loc} {point} силами {squad_count} сквадов!")
     defenders = get_players_on_territory(loc, point)
     defender_players = [uid for uid in defenders if uid in players and players[uid].get("faction") == owner and players[uid].get("health", 0) > 0]
     if defender_players:
@@ -1905,11 +2548,11 @@ def zombie_attack(loc, point, squad_count):
             bullet_resist = get_player_bullet_resist(def_id)
             actual_damage = max(0.5, damage_per_player - bullet_resist)
             p["health"] = max(0, p["health"] - actual_damage)
-            await send_message(def_id, f"⚔️ Зомбированные атакуют {loc} {point}!\n💔 Получено {actual_damage} урона от атаки.", None)
+            await send_message(def_id, f"⚔️ Зомбированные атакуют {loc} {point}!\n💔 Получено {actual_damage} урона от атаки.")
             if random.randint(1, 100) <= 30:
                 if p.get("armor") and p.get("armor_durability", 0) > 0:
                     p["armor_durability"] = max(0, p["armor_durability"] - 1)
-                    await send_message(def_id, "🔧 Броня повреждена (-1)!", None)
+                    await send_message(def_id, "🔧 Броня повреждена (-1)!")
             if p["health"] <= 0:
                 p["death_notified"] = True
                 lost_items, money_lost = calculate_and_apply_death_losses(def_id, max_items=10, max_money=100)
@@ -1923,7 +2566,7 @@ def zombie_attack(loc, point, squad_count):
                     p["location"] = new_loc
                     p["point"] = new_point
                     msg_lines.append(f"\n📍 Вы перемещены на {new_loc} {new_point}")
-        await send_message(def_id, "\n".join(msg_lines), create_main_menu_keyboard(def_id))
+                await send_message(def_id, "\n".join(msg_lines), create_main_menu_keyboard(def_id))
                 logs.append(f"💀 Убит игрок: {p.get('nickname', '?')}")
     remaining_after_battle = squad_count - enemy_squads
     if remaining_after_battle >= min_needed:
@@ -1932,18 +2575,18 @@ def zombie_attack(loc, point, squad_count):
         logs.append(f"⚔️ Атака: {loc} {point} vs {owner}")
         logs.append(f"✅ Захвачено! Потери: {enemy_squads}, размещено: {remaining_after_battle}")
         try:
-            await api.messages.send( {"peer_id": GAME_CHAT_ID, "message": f"🧟 Зомбированные захватили {loc} {point} у {owner}!", random_id=random.randint(1, 2**31)})
+            await bot.api.messages.send(peer_id=GAME_CHAT_ID, message=f"🧟 Зомбированные захватили {loc} {point} у {owner}!", random_id=0)
         except:
             pass
         if leader and leader in players:
-            await send_message(leader, f"💀 Территория {loc} {point} захвачена зомбированными!", None)
+            await send_message(leader, f"💀 Территория {loc} {point} захвачена зомбированными!")
         for def_id in defender_players:
             if players[def_id].get("health", 0) > 0:
                 new_loc, new_point = find_nearest_faction_territory(def_id)
                 if new_loc and new_point:
                     players[def_id]["location"] = new_loc
                     players[def_id]["point"] = new_point
-        await send_message(def_id, f"📍 Территория потеряна. Вы перемещены на {new_loc} {new_point}", create_main_menu_keyboard(def_id))
+                    await send_message(def_id, f"📍 Территория потеряна. Вы перемещены на {new_loc} {new_point}", create_main_menu_keyboard(def_id))
     elif remaining_after_battle > 0:
         set_territory_control(loc, point, None, 0)
         zombie_bot["squads"] -= squad_count
@@ -1956,29 +2599,6 @@ def zombie_attack(loc, point, squad_count):
         logs.append(f"❌ Атака отбита. Потеряно: {squad_count}")
     save_data()
     return logs
-def zombie_territory_attacked(location, point, attacker_faction):
-    global zombie_bot
-    agro_entry = {"loc": location, "point": point, "attacker": attacker_faction, "time": time.time(), "reinforced": False}
-    agro_points = zombie_bot.get("agro_points", [])
-    exists = False
-    for i, ap in enumerate(agro_points):
-        if isinstance(ap, dict) and ap.get("loc") == location and ap.get("point") == point:
-            agro_points[i] = agro_entry
-            exists = True
-            break
-        elif isinstance(ap, tuple) and ap[0] == location and ap[1] == point:
-            agro_points[i] = agro_entry
-            exists = True
-            break
-    if not exists:
-        agro_points.append(agro_entry)
-    zombie_bot["agro_points"] = agro_points
-    zombie_bot["last_attacked_by"] = attacker_faction
-    save_data()
-    try:
-        await send_message(353430025, f"🚨 АГРО! {attacker_faction} атаковал {location} {point}!", None)
-    except:
-        pass
 def zombie_reinforce():
     global zombie_bot, territory_control
     logs = []
@@ -2026,7 +2646,23 @@ def zombie_reinforce():
             logs.append(f"🛡️ Укрепление: {loc} {point} +{needed} сквадов")
     save_data()
     return logs
-def zombie_take_action(vk_session):
+def get_zombie_strength():
+    controlled = get_zombie_controlled_locations()
+    total_strength = 0
+    for loc, point in controlled:
+        ptype = POINT_TYPES.get(point, "Территория")
+        total_strength += POINT_STRENGTH.get(ptype, 1)
+    return total_strength
+def get_zombie_phase():
+    strength = get_zombie_strength()
+    current_phase = None
+    for min_strength, phase_data in sorted(ZOMBIE_PHASES.items()):
+        if strength >= min_strength:
+            current_phase = phase_data
+    if current_phase is None:
+        current_phase = ZOMBIE_PHASES[15]
+    return current_phase
+async def zombie_take_action():
     global zombie_bot
     phase = get_zombie_phase()
     strength = get_zombie_strength()
@@ -2126,7 +2762,7 @@ def zombie_take_action(vk_session):
                 if target_owner == ZOMBIE_FACTION:
                     logs.append(f"   ℹ️ {target_loc} {target_point} уже под контролем")
                 else:
-                    attack_logs = zombie_attack(target_loc, target_point, squads_to_send)
+                    attack_logs = await zombie_attack(target_loc, target_point, squads_to_send)
                     logs.extend(attack_logs)
             else:
                 if not pending or get_territory_owner(pending[0], pending[1]) == ZOMBIE_FACTION:
@@ -2161,52 +2797,9 @@ def zombie_take_action(vk_session):
     zombie_bot["last_logs"] = logs.copy()
     save_data()
     try:
-        await send_message(353430025, "\n".join(logs), None)
+        await send_message(353430025, "\n".join(logs))
     except:
         pass
-    return logs
-def zombie_loot_territory_custom(loc, point, times):
-    global zombie_bot, emission_counter
-    ptype = POINT_TYPES.get(point, "Территория")
-    logs = []
-    total_money = 0
-    total_items = {}
-    for _ in range(times):
-        if not check_territory_exhaustion(loc, point):
-            break
-        add_territory_exhaustion(loc, point)
-        emission_counter += 1
-        if ptype == "Территория":
-            drops = roll_drops(DROP_T, "Территория")
-        elif ptype == "Точка ресурсов":
-            drops = roll_drops(DROP_TR, "Точка ресурсов")
-        elif ptype == "База":
-            drops = roll_drops(DROP_B, "База")
-        elif ptype == "Аномальная зона":
-            money_gain = random.randint(10, 30)
-            total_money += money_gain
-            continue
-        elif ptype == "Логово":
-            money_gain = random.randint(15, 40)
-            total_money += money_gain
-            continue
-        else:
-            drops = roll_drops(DROP_T, "Территория")
-        for item, amount in drops.items():
-            if item == "Деньги":
-                total_money += amount
-            else:
-                total_items[item] = total_items.get(item, 0) + amount
-    zombie_bot["money"] += total_money
-    for item, amount in total_items.items():
-        zombie_bot["backpack"][item] = zombie_bot["backpack"].get(item, 0) + amount
-    logs.append(f"📍 {loc} {point}: 💲{total_money}р")
-    if total_items:
-        items_str = ", ".join([f"{k} x{v}" for k, v in list(total_items.items())[:5]])
-        logs.append(f"   📦 {items_str}")
-    if emission_counter >= EMISSION_MAX:
-        trigger_emission(vk_session)
-    save_data()
     return logs
 def get_zombie_status():
     controlled = get_zombie_controlled_locations()
@@ -2266,777 +2859,84 @@ def get_zombie_status():
     else:
         lines.append("   Нет данных")
     return "\n".join(lines)
-def get_zombie_strength():
-    controlled = get_zombie_controlled_locations()
-    total_strength = 0
-    for loc, point in controlled:
-        ptype = POINT_TYPES.get(point, "Территория")
-        total_strength += POINT_STRENGTH.get(ptype, 1)
-    return total_strength
-def get_zombie_phase():
-    strength = get_zombie_strength()
-    current_phase = None
-    for min_strength, phase_data in sorted(ZOMBIE_PHASES.items()):
-        if strength >= min_strength:
-            current_phase = phase_data
-    if current_phase is None:
-        current_phase = ZOMBIE_PHASES[15]
-    return current_phase
-async def find_nearest_faction_territory(user_id):
-    p = players[user_id]
-    faction = p.get("faction")
-    current_loc = p.get("location")
-    priority_types = ["База", "Точка ресурсов", "Территория", "Аномальная зона", "Логово"]
-    for ptype in priority_types:
-        for point in LOCATIONS.get(current_loc, []):
-            if POINT_TYPES.get(point) == ptype:
-                if get_territory_owner(current_loc, point) == faction:
-                    return current_loc, point
-    for loc in LOCATIONS:
-        for ptype in priority_types:
-            for point in LOCATIONS.get(loc, []):
-                if POINT_TYPES.get(point) == ptype:
-                    if get_territory_owner(loc, point) == faction:
-                        return loc, point
-    return None, None
-def get_emission_status():
-    global emission_counter, EMISSION_MAX
-    ratio = emission_counter / EMISSION_MAX
-    if ratio < 0.2:
-        return "🟢"
-    elif ratio < 0.4:
-        return "🟡"
-    elif ratio < 0.6:
-        return "🟠"
-    elif ratio < 0.8:
-        return "🔴"
-    elif ratio < 0.957:
-        return "⚫"
-    else:
-        return "☠️"
-def increment_emission(vk_session):
-    global emission_counter, last_restored_categories
-    emission_counter += 1
-    warning_threshold = int(EMISSION_MAX * 0.75)
-    if emission_counter == warning_threshold:
-        for uid in players:
-            if uid in banned_users:
-                continue
-            p = players[uid]
-            faction = p.get("faction")
-            if not faction or faction == "None" or faction is None:
-                continue
-            state = p.get("state")
-            if state in [STATE_WAITING_FOR_START, STATE_READING_INSTRUCTIONS, STATE_CHOOSING_FACTION, STATE_ENTERING_NICKNAME]:
-                continue
-            await send_message(uid, "⚠️ ВНИМАНИЕ! Приближается выброс! Укройтесь в лагере!", None)
-    if emission_counter >= EMISSION_MAX:
-        trigger_emission(vk_session)
-    save_data()
-def trigger_emission(vk_session):
-    global emission_counter, last_restored_categories, territory_exhaustion
-    categories = ["База", "Точка ресурсов", "Территория", "Логово", "Аномальная зона"]
-    num_categories = random.choice([1, 2])
-    restored = random.sample(categories, num_categories)
-    last_restored_categories = restored
-    for loc in LOCATIONS:
-        for point in LOCATIONS[loc]:
-            ptype = POINT_TYPES.get(point, "Территория")
-            if ptype in restored:
-                territory_exhaustion[loc][point] = 0
-    safe_states = [STATE_IN_CAMP, STATE_IN_BACKPACK, STATE_RESTING, STATE_USING_ITEM, STATE_BELT_MAIN, STATE_BELT_SELECT_SLOT, STATE_BELT_SELECT_ARTIFACT, STATE_BELT_EQUIP, STATE_BELT_UNEQUIP]
-    dead_players = []
-    for uid, p in players.items():
-        if uid in banned_users:
-            continue
-        faction = p.get("faction")
-        if not faction or faction == "None" or faction is None:
-            continue
-        state = p.get("state")
-        if state in [STATE_WAITING_FOR_START, STATE_READING_INSTRUCTIONS, STATE_CHOOSING_FACTION, STATE_ENTERING_NICKNAME]:
-            continue
-        if state not in safe_states:
-            if state == STATE_TRANSITION_WAIT:
-                p["transition_end_time"] = None
-                if p.get("previous_location") and p.get("previous_point"):
-                    p["location"] = p["previous_location"]
-                    p["point"] = p["previous_point"]
-                p["previous_location"] = None
-                p["previous_point"] = None
-                p["state"] = STATE_IN_MENU
-            elif state in [STATE_HUNTING, STATE_HUNTING_SHOOTING, STATE_ANOMALY_EXPLORE]:
-                p["state"] = STATE_IN_MENU
-                p["artifact_positions"] = []
-                p["anomaly_positions"] = []
-                p["hidden_anomaly_positions"] = []
-                p["current_mutant"] = None
-                p["mutant_hp"] = None
-                p["anomaly_path_choosing"] = False
-            p["health"] = 0
-            p["hunger"] = 10
-            p["radiation"] = 10
-            p["death_notified"] = True
-            nickname = p.get("nickname", "Неизвестный")
-            location = p.get("location", "?")
-            point = p.get("point", "?")
-            if faction != ZOMBIE_FACTION:
-                dead_players.append(f"• {nickname} ({faction}) — {location} {point}")
-            await send_message(uid, "☠️ Вы погибли от выброса! Нужно было укрыться в лагере!", None)
-    emission_counter = 0
-    restored_text = ", ".join(restored)
-    for uid, p in players.items():
-        if uid in banned_users:
-            continue
-        faction = p.get("faction")
-        if not faction or faction == "None" or faction is None:
-            continue
-        state = p.get("state")
-        if state in [STATE_WAITING_FOR_START, STATE_READING_INSTRUCTIONS, STATE_CHOOSING_FACTION, STATE_ENTERING_NICKNAME]:
-            continue
-        await send_message(uid, f"☢️ Выброс завершён!\n♻️ Восстановлены: {restored_text}", None)
-    if dead_players and GAME_CHAT_ID:
-        dead_list = "\n".join(dead_players)
-        chat_msg = f"☢️ ВЫБРОС ЗАВЕРШЁН!\n\n☠️ Погибшие сталкеры:\n{dead_list}\n\n♻️ Восстановлены: {restored_text}"
-        try:
-            await api.messages.send(peer_id=GAME_CHAT_ID,  message=chat_msg,  random_id=random.randint(1,  2**31))
-        except Exception as e:
-            logger.error(f"Ошибка отправки в беседу: {e}")
-    elif GAME_CHAT_ID:
-        chat_msg = f"☢️ ВЫБРОС завершён!\n\n✅ Все сталкеры укрылись!\n\n♻️ Восстановлены: {restored_text}"
-        try:
-            await api.messages.send(peer_id=GAME_CHAT_ID,  message=chat_msg,  random_id=random.randint(1,  2**31))
-        except Exception as e:
-            logger.error(f"Ошибка отправки в беседу: {e}")
-    save_data()
-def check_territory_exhaustion(location, point):
-    ptype = POINT_TYPES.get(point, "Территория")
-    limit = EXHAUSTION_LIMITS.get(ptype, 100)
-    current = territory_exhaustion.get(location, {}).get(point, 0)
-    return current < limit
-def add_territory_exhaustion(location, point):
-    global territory_exhaustion
-    if location not in territory_exhaustion:
-        territory_exhaustion[location] = {}
-    territory_exhaustion[location][point] = territory_exhaustion[location].get(point, 0) + 1
-    save_data()
-def init_territory_control():
-    global territory_control
+def init_last_stand_mode():
+    global players, factions, territory_control, territory_exhaustion, emission_counter
+    global last_restored_categories, faction_shared_squads, LAST_STAND_MODE
+    global faction_warehouses, faction_warehouse_money, zombie_bot
+    LAST_STAND_MODE = True
     territory_control = {}
+    territory_exhaustion = {}
+    emission_counter = 0
+    last_restored_categories = []
+    faction_shared_squads = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ Одиночки": 0, ZOMBIE_FACTION: 0}
+    faction_warehouses = {"🛡️ Долг": {}, "☦️ Грех": {}, "☢️ Одиночки": {}, ZOMBIE_FACTION: {}}
+    faction_warehouse_money = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ Одиночки": 0, ZOMBIE_FACTION: 0}
+    zombie_bot = {"money": 0, "squads": 0, "food_units": 0, "med_units": 0, "rad_units": 0, "last_action_time": 0, "next_action": "", "backpack": {}, "mode": "normal", "priority_target": None, "agro_points": [], "last_attacked_by": None, "pending_target": None, "last_logs": [], "bonus_squads": 0}
     for loc in LOCATIONS:
         territory_control[loc] = {}
+        territory_exhaustion[loc] = {}
         for point in LOCATIONS[loc]:
             territory_control[loc][point] = {"faction": None, "squads": 0}
+            territory_exhaustion[loc][point] = 0
     territory_control["Кордон"]["Б1"] = {"faction": "🛡️ Долг", "squads": 5}
-    territory_control["Тёмная долина"]["Б1"] = {"faction": "☦️ Грех", "squads": 5}
-    territory_control["Свалка"]["Б1"] = {"faction": "☢️ Одиночки", "squads": 5}
-    save_data()
-def get_territory_owner(location, point):
-    if location in territory_control and point in territory_control[location]:
-        return territory_control[location][point].get("faction")
-    return None
-def get_territory_squads(location, point):
-    if location in territory_control and point in territory_control[location]:
-        return territory_control[location][point].get("squads", 0)
-    return 0
-def set_territory_control(location, point, faction, squads):
-    global territory_control
-    if location not in territory_control:
-        territory_control[location] = {}
-    territory_control[location][point] = {"faction": faction, "squads": squads}
-    save_data()
-async def is_player_on_own_territory(user_id):
-    p = players[user_id]
-    location, point = get_player_position(user_id)
-    faction = p.get("faction")
-    owner = get_territory_owner(location, point)
-    return owner == faction
-def get_faction_leader(faction):
-    return faction_leaders.get(faction)
-async def set_faction_leader(user_id):
-    global faction_leaders
-    faction_leaders[faction] = user_id
-    save_data()
-def get_players_on_territory(location, point):
-    result = []
+    territory_control["Кордон"]["Б2"] = {"faction": "☢️ Одиночки", "squads": 5}
+    territory_control["Кордон"]["Б3"] = {"faction": "☦️ Грех", "squads": 5}
+    territory_control["Свалка"]["Б1"] = {"faction": ZOMBIE_FACTION, "squads": 5}
+    territory_control["Поляна"]["Б1"] = {"faction": ZOMBIE_FACTION, "squads": 5}
+    territory_control["Тёмная долина"]["Б3"] = {"faction": ZOMBIE_FACTION, "squads": 5}
     for uid, p in players.items():
-        loc, pt = get_player_position(uid)
-        if loc == location and pt == point:
-            result.append(uid)
-    return result
-async def get_player_bullet_resist(user_id):
-    p = players[user_id]
-    return p.get("bullet_resist", 0) + get_belt_bonus(user_id, "bullet_resist")
-async def get_armor_category(user_id):
-    p = players[user_id]
-    armor = p.get("armor")
-    if not armor:
-        return 0
-    faction = p.get("faction")
-    for i, item in enumerate(EQUIPMENT[faction]["armor"]):
-        if item[0] == armor:
-            return i + 1
-    return 0
-def generate_war_map_image(location):
-    map_path = LOCATION_MAPS.get(location)
-    if not map_path or not os.path.exists(map_path):
-        return None
-    try:
-        img = Image.open(map_path).convert("RGBA")
-        draw = ImageDraw.Draw(img)
-        icon_size = 45 if location == "Поляна" else 30
-        faction_icons = {}
-        for faction, icon_path in FACTION_ICONS.items():
-            try:
-                faction_icons[faction] = Image.open(icon_path).convert("RGBA").resize((icon_size, icon_size))
-            except:
-                faction_icons[faction] = None
-        if location in POINT_COORDINATES:
-            for point, (x, y) in POINT_COORDINATES[location].items():
-                owner = get_territory_owner(location, point)
-                if owner and owner in faction_icons and faction_icons[owner]:
-                    icon = faction_icons[owner]
-                    img.paste(icon, (x - icon_size // 2, y - icon_size // 2), icon)
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
-        buffer.seek(0)
-        return buffer
-    except Exception as e:
-        logger.error(f"Ошибка генерации карты войны: {e}")
-        return None
-async def send_war_map(user_id):
-    try:
-        img_buffer = generate_war_map_image(location)
-        if img_buffer:
-            upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-            response = vk_session.http.post(upload_url, files={"photo": ("map.png", img_buffer, "image/png")})
-            result = response.json()
-            photo_data = vk_session.method("photos.saveMessagesPhoto", {
-                "photo": result["photo"],
-                "server": result["server"],
-                "hash": result["hash"]
-            })[0]
-            await api.messages.send( {
-                user_id=user_id,
-                "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}",
-                random_id=random.randint(1, 2**31),
-                "message": message,
-                keyboard=keyboard.get_keyboard()
-            })
-            return True
-    except Exception as e:
-        logger.error(f"Ошибка отправки карты войны: {e}")
-    await send_message(user_id, message, keyboard)
-    return False
-def process_attack(attacker_id, location, point, squad_count, with_player):
-    attacker = players[attacker_id]
-    attacker_faction = attacker["faction"]
-    defender_faction = get_territory_owner(location, point)
-    if defender_faction == ZOMBIE_FACTION and LAST_STAND_MODE:
-        zombie_territory_attacked(location, point, attacker_faction)
-    defender_squads = get_territory_squads(location, point)
-    ptype = POINT_TYPES.get(point, "Территория")
-    min_squads = MIN_SQUADS_FOR_POINT.get(ptype, 1)
-    if defender_faction is not None and defender_faction != attacker_faction:
-        if squad_count < min_squads:
-            return f"❌ Для атаки на {ptype} нужно минимум {min_squads} сквадов."
-    def notify_faction_leader(faction, message):
-        leader = get_faction_leader(faction)
-        if leader and leader in players and leader != attacker_id:
-            await send_message(leader, message, None)
-    def damage_equipment(player_id, messages_list):
-        p = players[player_id]
-        if random.randint(1, 100) <= 50:
-            equip_to_damage = []
-            if p.get("weapon") and p.get("weapon_durability", 0) > 0:
-                equip_to_damage.append("weapon")
-            if p.get("armor") and p.get("armor_durability", 0) > 0:
-                equip_to_damage.append("armor")
-            if equip_to_damage:
-                target = random.choice(equip_to_damage)
-                if target == "weapon":
-                    p["weapon_durability"] = max(0, p["weapon_durability"] - 1)
-                    if player_id == attacker_id:
-                        messages_list.append("🔧 Ваше оружие повреждено (-1)!")
-                    else:
-                        await send_message(player_id, "🔧 Ваше оружие повреждено в бою (-1)!", None)
-                else:
-                    p["armor_durability"] = max(0, p["armor_durability"] - 1)
-                    if player_id == attacker_id:
-                        messages_list.append("🔧 Ваша броня повреждена (-1)!")
-                    else:
-                        await send_message(player_id, "🔧 Ваша броня повреждена в бою (-1)!", None)
-    if defender_faction is None:
-        if squad_count >= min_squads:
-            set_territory_control(location, point, attacker_faction, squad_count)
-            attacker["squads"] -= squad_count
-            save_data()
-            return f"✅ Территория {location} {point} захвачена! Размещено {squad_count} сквадов."
-        else:
-            return f"❌ Недостаточно сквадов для захвата. Нужно минимум {min_squads}."
-    if defender_faction == attacker_faction:
-        territory_control[location][point]["squads"] += squad_count
-        attacker["squads"] -= squad_count
-        save_data()
-        return f"✅ Подкрепление отправлено. На точке теперь {territory_control[location][point]['squads']} сквадов."
-    if with_player:
-        if not attacker.get("weapon") or attacker.get("health", 0) <= 0:
-            return "❌ Для личного участия нужно оружие и здоровье."
-    notify_faction_leader(defender_faction, f"⚠️ Территория {location} {point} атакована группировкой {attacker_faction}!")
-    all_on_territory = get_players_on_territory(location, point)
-    defenders = [uid for uid in all_on_territory if players[uid].get("faction") == defender_faction and players[uid].get("health", 0) > 0]
-    total_bullet_resist = sum(get_player_bullet_resist(uid) for uid in defenders)
-    player_damage = 0
-    bonus_msg_parts = []
-    if with_player:
-        player_damage = attacker.get("weapon_damage", 0) + get_belt_bonus(attacker_id, "weapon_damage")
-        weapon_name = attacker.get("weapon", "")
-        special = SPECIAL_WEAPONS.get(weapon_name, {})
-        if ptype in ["Аномальная зона", "Логово"]:
-            war_chance = special.get("war_bonus_chance", 0)
-            war_bonus = special.get("war_bonus_damage", 0)
-            if war_chance > 0 and random.randint(1, 100) <= war_chance:
-                player_damage += war_bonus
-                bonus_msg_parts.append(f"⚡ {weapon_name}: +{war_bonus} урона!")
-    defender_damage_to_attacker = squad_count / 2
-    if with_player:
-        defender_damage_to_attacker += player_damage
-    def calculate_return_damage_to_player():
-        squad_damage = round(defender_squads / 3)
-        armor_cat = get_armor_category(attacker_id)
-        armor_damage = [1, 1.5, 2, 2.5, 3, 3.5][min(armor_cat, 5)]
-        return squad_damage + armor_damage
-    effective_defender_squads = max(0, defender_squads - total_bullet_resist)
-    remaining_defender_after_player = max(0, effective_defender_squads - player_damage) if with_player else effective_defender_squads
-    if squad_count <= remaining_defender_after_player:
-        squads_destroyed = squad_count
-        remaining_attacker_squads = 0
-        remaining_defender_squads = remaining_defender_after_player - squad_count
-        territory_control[location][point]["squads"] = remaining_defender_squads
-        global faction_shared_squads
-        if remaining_defender_squads == 0:
-            set_territory_control(location, point, None, 0)
-            notify_faction_leader(defender_faction, f"⚠️ Территория {location} {point} потеряна — не осталось сквадов!")
-        elif remaining_defender_squads < min_squads:
-            faction_shared_squads[defender_faction] = faction_shared_squads.get(defender_faction, 0) + remaining_defender_squads
-            set_territory_control(location, point, None, 0)
-            notify_faction_leader(defender_faction, f"⚠️ Территория {location} {point} потеряна!\n🔙 {remaining_defender_squads} сквадов вернулось в общее хранилище.")
-        if defenders:
-            damage_per_player = defender_damage_to_attacker / len(defenders)
-            for def_id in defenders:
-                players[def_id]["health"] = max(0, players[def_id]["health"] - damage_per_player)
-                damage_equipment(def_id, bonus_msg_parts)
-                await send_message(def_id, f"⚔️ Атака на {location} {point} отбита.", None)
-                if players[def_id]["health"] <= 0:
-                    handle_war_death(def_id, attacker_id)
-        if with_player:
-            return_damage = calculate_return_damage_to_player()
-            attacker["health"] = max(0, attacker["health"] - return_damage)
-            bonus_msg_parts.append(f"💔 Вы получили {return_damage} урона.")
-            damage_equipment(attacker_id, bonus_msg_parts)
-            if attacker["health"] <= 0:
-                handle_war_death(attacker_id, defenders[0] if defenders else None)
-        attacker["squads"] -= squad_count
-        save_data()
-        bonus_msg = "\n" + "\n".join(bonus_msg_parts) if bonus_msg_parts else ""
-        return f"❌ Атака отбита. Потеряно {squads_destroyed} сквадов.{bonus_msg}"
-    remaining_attacker_squads = squad_count - remaining_defender_after_player
-    if defenders:
-        damage_per_player = defender_damage_to_attacker / len(defenders)
-        for def_id in defenders:
-            players[def_id]["health"] = max(0, players[def_id]["health"] - damage_per_player)
-            damage_equipment(def_id, bonus_msg_parts)
-            await send_message(def_id, f"⚔️ Территория {location} {point} потеряна.", None)
-            if players[def_id]["health"] <= 0:
-                handle_war_death(def_id, attacker_id)
-    if with_player:
-        return_damage = calculate_return_damage_to_player()
-        attacker["health"] = max(0, attacker["health"] - return_damage)
-        bonus_msg_parts.append(f"💔 Вы получили {return_damage} урона.")
-        damage_equipment(attacker_id, bonus_msg_parts)
-        if attacker["health"] <= 0:
-            handle_war_death(attacker_id, defenders[0] if defenders else None)
-            attacker["squads"] -= squad_count
-            save_data()
-            bonus_msg = "\n" + "\n".join(bonus_msg_parts) if bonus_msg_parts else ""
-            return f"💀 Вы погибли в бою.{bonus_msg}"
-    squads_lost = squad_count - remaining_attacker_squads
-    bonus_msg_parts.append(f"💀 Потеряно сквадов: {squads_lost}")
-    if remaining_attacker_squads >= min_squads:
-        set_territory_control(location, point, attacker_faction, remaining_attacker_squads)
-        attacker["squads"] -= squad_count
-        notify_faction_leader(defender_faction, f"💀 Территория {location} {point} захвачена {attacker_faction}!")
-        save_data()
-        bonus_msg = "\n" + "\n".join(bonus_msg_parts) if bonus_msg_parts else ""
-        return f"✅ Территория {location} {point} захвачена! Размещено {remaining_attacker_squads} сквадов.{bonus_msg}"
-    else:
-        set_territory_control(location, point, None, 0)
-        attacker["squads"] -= squad_count
-        attacker["squads"] += remaining_attacker_squads
-        notify_faction_leader(defender_faction, f"⚠️ Территория {location} {point} потеряна!")
-        save_data()
-        bonus_msg = "\n" + "\n".join(bonus_msg_parts) if bonus_msg_parts else ""
-        return f"⚠️ Территория освобождена, но недостаточно сквадов для удержания (нужно {min_squads}).\n🔙 {remaining_attacker_squads} сквадов вернулось к вам.{bonus_msg}"
-def handle_war_death(dead_id, killer_id):
-    dead = players[dead_id]
-    dead_faction = dead.get("faction")
-    backpack = dead.get("backpack", {})
-    money = dead.get("money", 0)
-    lost_items = {}
-    lootable_items = []
-    for item, count in list(backpack.items()):
-        if count > 0 and item not in DONATION_ARTIFACTS:
-            lootable_items.extend([item] * count)
-    total_lootable = len(lootable_items)
-    if total_lootable > 0:
-        max_items_to_lose = max(1, int(total_lootable * 0.15))
-        num_items_to_lose = random.randint(1, max_items_to_lose)
-        random.shuffle(lootable_items)
-        lost_list = lootable_items[:num_items_to_lose]
-        for item in lost_list:
-            lost_items[item] = lost_items.get(item, 0) + 1
-        for item, count in lost_items.items():
-            backpack[item] -= count
-            if backpack[item] <= 0:
-                del backpack[item]
-    max_money_to_lose = max(1, int(money * 0.15))
-    money_lost = random.randint(1, max_money_to_lose) if money > 0 else 0
-    dead["money"] -= money_lost
-    dead["health"] = 0
-    dead["death_notified"] = True
-    if killer_id and killer_id in players and dead_faction != ZOMBIE_FACTION:
-        killer = players[killer_id]
-        for item, count in lost_items.items():
-            killer["backpack"][item] = killer["backpack"].get(item, 0) + count
-        killer["money"] = killer.get("money", 0) + money_lost
-        loot_msg = f"💀 Вы убили врага в бою!"
-        if lost_items or money_lost:
-            loot_msg += "\nПолучено:"
-            for item, count in lost_items.items():
-                loot_msg += f"\n  {item} x{count}"
-            if money_lost > 0:
-                loot_msg += f"\n  💲 {money_lost}р"
-        await send_message(killer_id, loot_msg, None)
-    msg_lines = ["💀 Вы погибли в бою!"]
-    if lost_items or money_lost:
-        msg_lines.append("Потеряно:")
-        for item, count in lost_items.items():
-            msg_lines.append(f"  {item} x{count}")
-        if money_lost > 0:
-            msg_lines.append(f"  💲 {money_lost}р")
-        await send_message(dead_id, "\n".join(msg_lines), create_main_menu_keyboard(dead_id))
-    save_data()
-async def init_anomaly_exploration(user_id):
-    p = players[user_id]
-    location = p["location"]
-    point = p["point"]
-    atype = ANOMALY_ZONES.get(location, {}).get(point, "грави")
-    p["current_anomaly_type"] = atype
-    p["state"] = STATE_ANOMALY_EXPLORE
-    if random.randint(1, 100) <= 70:
-        safe_path = random.randint(1, 3)
-        p["anomaly_safe_path"] = safe_path
-        p["anomaly_path_choosing"] = True
-    else:
-        p["anomaly_path_choosing"] = False
-        p["anomaly_safe_path"] = None
-        start_anomaly_map(user_id)
-    save_data()
-async def start_anomaly_map(user_id):
-    p = players[user_id]
-    player_start = (random.randint(0, 5), random.randint(0, 5))
-    p["player_pos"] = player_start
-    num_artifacts = random.randint(1, 3)
-    num_anomalies = random.randint(3, 6)
-    num_hidden_anomalies = random.randint(0, 2)
-    occupied = {player_start}
-    artifact_positions = []
-    for _ in range(num_artifacts):
-        attempts = 0
-        while attempts < 50:
-            pos = (random.randint(0, 5), random.randint(0, 5))
-            if pos not in occupied:
-                artifact_positions.append(pos)
-                occupied.add(pos)
-                break
-            attempts += 1
-    anomaly_positions = []
-    for _ in range(num_anomalies):
-        attempts = 0
-        while attempts < 50:
-            pos = (random.randint(0, 5), random.randint(0, 5))
-            if pos not in occupied:
-                anomaly_positions.append(pos)
-                occupied.add(pos)
-                break
-            attempts += 1
-    hidden_anomaly_positions = []
-    for _ in range(num_hidden_anomalies):
-        attempts = 0
-        while attempts < 50:
-            pos = (random.randint(0, 5), random.randint(0, 5))
-            if pos not in occupied:
-                hidden_anomaly_positions.append(pos)
-                occupied.add(pos)
-                break
-            attempts += 1
-    p["artifact_positions"] = artifact_positions
-    p["anomaly_positions"] = anomaly_positions
-    p["hidden_anomaly_positions"] = hidden_anomaly_positions
-    p["anomaly_path_choosing"] = False
-    p["anomaly_safe_path"] = None
-async def get_detector_alerts(user_id):
-    p = players[user_id]
-    detector = p.get("detector", None)
-    px, py = p.get("player_pos", (0, 0))
-    artifact_positions = [tuple(pos) for pos in p.get("artifact_positions", [])]
-    anomaly_positions = [tuple(pos) for pos in p.get("anomaly_positions", [])]
-    alerts = []
-    if detector in ["Медведь", "Велес", "Сварог"]:
-        anomaly_dirs = []
-        for ax, ay in anomaly_positions:
-            if abs(ax - px) <= 1 and abs(ay - py) <= 1 and (ax, ay) != (px, py):
-                direction = ""
-                if ay < py:
-                    direction += "⬆️"
-                if ay > py:
-                    direction += "⬇️"
-                if ax < px:
-                    direction += "⬅️"
-                if ax > px:
-                    direction += "➡️"
-                if direction and direction not in anomaly_dirs:
-                    anomaly_dirs.append(direction)
-        if anomaly_dirs:
-            alerts.append("🚨" + "|".join(anomaly_dirs))
-    if detector == "Отклик":
-        for ax, ay in artifact_positions:
-            if abs(ax - px) <= 1 and abs(ay - py) <= 1 and (ax, ay) != (px, py):
-                alerts.append("✴️✴️✴️")
-                break
-    elif detector == "Медведь":
-        for ax, ay in artifact_positions:
-            dist = max(abs(ax - px), abs(ay - py))
-            if dist == 1:
-                alerts.append("✴️✴️✴️")
-                break
-            elif dist == 2:
-                alerts.append("✴️✴️")
-                break
-    return " ".join(alerts)
-async def generate_anomaly_map_image(user_id):
-    p = players[user_id]
-    player_pos = tuple(p.get("player_pos", (0, 0)))
-    artifact_positions = [tuple(pos) for pos in p.get("artifact_positions", [])]
-    anomaly_positions = [tuple(pos) for pos in p.get("anomaly_positions", [])]
-    detector = p.get("detector", None)
-    cell_size = 60
-    grid_size = 6
-    width = cell_size * grid_size
-    height = cell_size * grid_size
-    try:
-        bg = Image.open("backgrounds/background.png").convert("RGBA").resize((width, height))
-        enhancer = ImageEnhance.Brightness(bg)
-        bg = enhancer.enhance(0.75)
-    except:
-        bg = Image.new("RGBA", (width, height), (40, 40, 40, 255))
-    img = bg.copy()
-    draw = ImageDraw.Draw(img)
-    for row in range(grid_size):
-        for col in range(grid_size):
-            x = col * cell_size
-            y = row * cell_size
-            draw.rectangle([x, y, x + cell_size, y + cell_size], outline="black", width=2)
-    icon_size = cell_size - 10
-    try:
-        player_icon = Image.open("backgrounds/игрок.png").convert("RGBA").resize((icon_size, icon_size))
-    except:
-        player_icon = None
-    try:
-        artifact_icon = Image.open("backgrounds/арт.png").convert("RGBA").resize((icon_size, icon_size))
-    except:
-        artifact_icon = None
-    try:
-        anomaly_icon = Image.open("backgrounds/аном.png").convert("RGBA").resize((icon_size, icon_size))
-    except:
-        anomaly_icon = None
-    px, py = player_pos
-    if detector in ["Велес", "Сварог"]:
-        for ax, ay in artifact_positions:
-            if abs(ax - px) <= 4 and abs(ay - py) <= 4:
-                x = ax * cell_size + 5
-                y = ay * cell_size + 5
-                if artifact_icon:
-                    img.paste(artifact_icon, (x, y), artifact_icon)
-                else:
-                    draw.ellipse([x, y, x + icon_size, y + icon_size], fill="yellow", outline="orange")
-    if detector == "Сварог":
-        for ax, ay in anomaly_positions:
-            if abs(ax - px) <= 4 and abs(ay - py) <= 4:
-                x = ax * cell_size + 5
-                y = ay * cell_size + 5
-                if anomaly_icon:
-                    img.paste(anomaly_icon, (x, y), anomaly_icon)
-                else:
-                    draw.ellipse([x, y, x + icon_size, y + icon_size], fill="cyan", outline="blue")
-    x = px * cell_size + 5
-    y = py * cell_size + 5
-    if player_icon:
-        img.paste(player_icon, (x, y), player_icon)
-    else:
-        draw.ellipse([x, y, x + icon_size, y + icon_size], fill="white", outline="gray")
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    buffer.seek(0)
-    return buffer
-async def handle_anomaly_move(user_id):
-    p = players[user_id]
-    px, py = p.get("player_pos", (0, 0))
-    if direction == "⬆️" and py > 0:
-        py -= 1
-    elif direction == "⬇️" and py < 5:
-        py += 1
-    elif direction == "⬅️" and px > 0:
-        px -= 1
-    elif direction == "➡️" and px < 5:
-        px += 1
-    else:
-        await send_message(user_id, "❌ Нельзя двигаться в этом направлении.", create_anomaly_movement_keyboard())
-        return
-    p["player_pos"] = (px, py)
-    messages = []
-    artifact_positions = [tuple(pos) for pos in p.get("artifact_positions", [])]
-    anomaly_positions = [tuple(pos) for pos in p.get("anomaly_positions", [])]
-    hidden_anomaly_positions = [tuple(pos) for pos in p.get("hidden_anomaly_positions", [])]
-    if (px, py) in artifact_positions:
-        atype = p.get("current_anomaly_type", "грави")
-        found_artifact = get_random_artifact_by_rarity(atype)
-        p["backpack"][found_artifact] = p["backpack"].get(found_artifact, 0) + 1
-        artifact_positions.remove((px, py))
-        p["artifact_positions"] = artifact_positions
-        detector = p.get("detector", "Отклик")
-        if detector == "Велес":
-            charge_cost = 2
-        elif detector == "Сварог":
-            charge_cost = 3
-        else:
-            charge_cost = 1
-        p["detector_charge"] = max(0, p.get("detector_charge", 0) - charge_cost)
-        messages.append(f"🌕 Вы нашли артефакт: {found_artifact}!")
-        messages.append(f"📟 Детектор разрядился на {charge_cost} заряд(а).")
-        if not artifact_positions:
-            messages.append("✅ Все артефакты в этой зоне найдены!")
+        faction = p.get("faction")
+        if faction and faction in LAST_STAND_START_POSITIONS and faction != ZOMBIE_FACTION:
+            start_loc, start_point = LAST_STAND_START_POSITIONS[faction]
+            p["location"] = start_loc
+            p["point"] = start_point
             p["state"] = STATE_IN_MENU
-            save_data()
-        await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
-            return
-        min_charge = 2 if detector == "Велес" else (3 if detector == "Сварог" else 1)
-        if p["detector_charge"] < min_charge:
-            messages.append(f"🔋 Заряда детектора недостаточно для продолжения поиска! Вы покидаете аномальную зону.")
-            p["state"] = STATE_IN_MENU
-            save_data()
-        await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
-            return
-    if (px, py) in hidden_anomaly_positions:
-        atype = p.get("current_anomaly_type", "грави")
-        min_dmg, max_dmg = ANOMALY_DAMAGE[atype]
-        raw_damage = round(random.uniform(min_dmg, max_dmg), 1)
-        anomaly_resist = get_total_anomaly_resist(user_id)
-        actual_damage = max(0, round(raw_damage - anomaly_resist, 1))
-        p["health"] = max(0, p["health"] - actual_damage)
-        messages.append(f"💥 Вы попали в тайную аномалию! Получено {actual_damage} урона. (❤️ {p['health']}/10)")
-        hidden_anomaly_positions.remove((px, py))
-        p["hidden_anomaly_positions"] = hidden_anomaly_positions
-        if random.randint(1, 100) <= 25 and p.get("armor"):
-            p["armor_durability"] = max(0, p["armor_durability"] - 1)
-            messages.append("🔧 Броня повреждена (-1)!")
-        if p["health"] <= 0:
-            messages.append("💀 Вы погибли в аномалии!")
-            lost_items, money_lost = calculate_and_apply_death_losses(user_id, max_items=5, max_money=50)
-            messages.extend(format_death_losses(lost_items, money_lost))
-            p["state"] = STATE_IN_MENU
-            p["death_notified"] = True
-            normalize_stats(user_id)
-            save_data()
-        await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
-            return
-    if (px, py) in anomaly_positions:
-        atype = p.get("current_anomaly_type", "грави")
-        min_dmg, max_dmg = ANOMALY_DAMAGE[atype]
-        raw_damage = round(random.uniform(min_dmg, max_dmg), 1)
-        anomaly_resist = get_total_anomaly_resist(user_id)
-        actual_damage = max(0, round(raw_damage - anomaly_resist, 1))
-        p["health"] = max(0, p["health"] - actual_damage)
-        messages.append(f"💥 Вы попали в аномалию! Получено {actual_damage} урона. (❤️ {p['health']}/10)")
-        if random.randint(1, 100) <= 25 and p.get("armor"):
-            p["armor_durability"] = max(0, p["armor_durability"] - 1)
-            messages.append("🔧 Броня повреждена (-1)!")
-        if p["health"] <= 0:
-            messages.append("💀 Вы погибли в аномалии!")
-            lost_items, money_lost = calculate_and_apply_death_losses(user_id, max_items=5, max_money=50)
-            messages.extend(format_death_losses(lost_items, money_lost))
-            p["state"] = STATE_IN_MENU
-            p["death_notified"] = True
-            normalize_stats(user_id)
-            save_data()
-        await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
-            return
-    alerts = get_detector_alerts(user_id)
-    if alerts:
-        messages.append(alerts)
+            p["transition_end_time"] = None
     save_data()
-    try:
-        img_buffer = generate_anomaly_map_image(user_id)
-        upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-        response = vk_session.http.post(upload_url, files={"photo": ("map.png", img_buffer, "image/png")})
-        result = response.json()
-        photo_data = vk_session.method("photos.saveMessagesPhoto", {"photo": result["photo"], "server": result["server"], "hash": result["hash"]})[0]
-        msg = "\n".join(messages) if messages else "Вы переместились."
-        await api.messages.send( {user_id=user_id, "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}", random_id=random.randint(1, 2**31), message=msg, "keyboard": create_anomaly_movement_keyboard().get_keyboard()})
-    except Exception as e:
-        logger.error(f"Ошибка генерации карты: {e}")
-        await send_message(user_id, "\n".join(messages) if messages else "Вы переместились.", create_anomaly_movement_keyboard())
-async def send_location_map(user_id):
-    try:
-        img_buffer = generate_war_map_image(location)
-        if img_buffer:
-            upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-            response = vk_session.http.post(upload_url, files={"photo": ("map.png", img_buffer, "image/png")})
-            result = response.json()
-            photo_data = vk_session.method("photos.saveMessagesPhoto", {
-                "photo": result["photo"],
-                "server": result["server"],
-                "hash": result["hash"]
-            })[0]
-            current_point = players[user_id]["point"]
-            await api.messages.send( {
-                user_id=user_id,
-                "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}",
-                random_id=random.randint(1, 2**31),
-                "message": f"🗺️ Карта локации: {location}\n📍 Ваша точка: {current_point}\n\n🌐 Впишите название точки на карте, на которую собираетесь перейти:\n❕ Пример: \"ТР1\", \"Б1\"."
-            })
-            return True
-    except Exception as e:
-        logger.error(f"Ошибка отправки карты: {e}")
-        await send_message(user_id, '🌐 Впишите название точки на карте, на которую собираетесь перейти:\n❕ Пример: "ТР1", "Б1".', None)
-    return False
-async def handle_hunting_escape(user_id):
-    p = players[user_id]
-    lost_items, money_lost = calculate_and_apply_death_losses(user_id, max_items=5, max_money=50)
-    msg_lines = ["💨 Вы сбежали с охоты!"]
-    msg_lines.extend(format_death_losses(lost_items, money_lost))
-        await send_message(user_id, "\n".join(msg_lines), create_main_menu_keyboard(user_id))
-    p["state"] = STATE_IN_MENU
-    p.pop("current_mutant", None)
-    p.pop("mutant_hp", None)
+def init_last_stand_mode_v2():
+    global players, factions, territory_control, territory_exhaustion, emission_counter
+    global last_restored_categories, faction_shared_squads, LAST_STAND_MODE
+    global faction_warehouses, faction_warehouse_money, zombie_bot
+    LAST_STAND_MODE = True
+    territory_control = {}
+    territory_exhaustion = {}
+    emission_counter = 0
+    last_restored_categories = []
+    faction_shared_squads = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ Одиночки": 0, ZOMBIE_FACTION: 0}
+    faction_warehouses = {"🛡️ Долг": {}, "☦️ Грех": {}, "☢️ Одиночки": {}, ZOMBIE_FACTION: {}}
+    faction_warehouse_money = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ Одиночки": 0, ZOMBIE_FACTION: 0}
+    zombie_bot = {"money": 0, "squads": 85, "food_units": 0, "med_units": 0, "rad_units": 0, "last_action_time": time.time(), "next_action": "лутание", "backpack": {}, "mode": "normal", "priority_target": None, "agro_points": [], "last_attacked_by": None, "pending_target": None, "last_logs": [], "bonus_squads": 85}
+    for loc in LOCATIONS:
+        territory_control[loc] = {}
+        territory_exhaustion[loc] = {}
+        for point in LOCATIONS[loc]:
+            territory_control[loc][point] = {"faction": None, "squads": 0}
+            territory_exhaustion[loc][point] = 0
+    territory_control["Кордон"]["Б1"] = {"faction": "🛡️ Долг", "squads": 5}
+    territory_control["Свалка"]["Б1"] = {"faction": "☢️ Одиночки", "squads": 5}
+    territory_control["Тёмная долина"]["Б1"] = {"faction": "☦️ Грех", "squads": 5}
+    territory_control["Поляна"]["Б1"] = {"faction": ZOMBIE_FACTION, "squads": 5}
+    for uid, p in players.items():
+        faction = p.get("faction")
+        if faction == "🛡️ Долг":
+            p["location"] = "Кордон"
+            p["point"] = "Б1"
+        elif faction == "☢️ Одиночки":
+            p["location"] = "Свалка"
+            p["point"] = "Б1"
+        elif faction == "☦️ Грех":
+            p["location"] = "Тёмная долина"
+            p["point"] = "Б1"
+        if faction and faction != ZOMBIE_FACTION:
+            p["state"] = STATE_IN_MENU
+            p["transition_end_time"] = None
     save_data()
-async def use_item(user_id):
+async def use_item(user_id, item_input, from_global_command=False):
     p = players[user_id]
     parts = item_input.strip().split()
     if not parts:
-        if from_global_command:
-            await send_message(user_id, "❌ Укажите предмет.", None)
-        else:
-        await send_message(user_id, "❌ Укажите предмет.", create_backpack_menu_keyboard())
+        kb = None if from_global_command else create_backpack_menu_keyboard()
+        await send_message(user_id, "❌ Укажите предмет.", kb)
         return
     item_name = ""
     count = 1
@@ -3049,23 +2949,17 @@ async def use_item(user_id):
     else:
         item_name = item_input.strip().lower()
     if item_name == "батарейки":
-        if from_global_command:
-            await send_message(user_id, "❌ Батарейки нельзя употребить.", None)
-        else:
-        await send_message(user_id, "❌ Батарейки нельзя употребить.", create_backpack_menu_keyboard())
+        kb = None if from_global_command else create_backpack_menu_keyboard()
+        await send_message(user_id, "❌ Батарейки нельзя употребить.", kb)
         return
     if item_name not in ITEM_EFFECTS:
-        if from_global_command:
-            await send_message(user_id, "❌ Неизвестный предмет.", None)
-        else:
-        await send_message(user_id, "❌ Неизвестный предмет.", create_backpack_menu_keyboard())
+        kb = None if from_global_command else create_backpack_menu_keyboard()
+        await send_message(user_id, "❌ Неизвестный предмет.", kb)
         return
     backpack = p.get("backpack", {})
     if backpack.get(item_name, 0) < count:
-        if from_global_command:
-            await send_message(user_id, f"❌ У вас нет {count} шт. этого предмета.", None)
-        else:
-        await send_message(user_id, f"❌ У вас нет {count} шт. этого предмета.", create_backpack_menu_keyboard())
+        kb = None if from_global_command else create_backpack_menu_keyboard()
+        await send_message(user_id, f"❌ У вас нет {count} шт. этого предмета.", kb)
         return
     effects = ITEM_EFFECTS[item_name]
     messages = []
@@ -3078,10 +2972,8 @@ async def use_item(user_id):
             del backpack[item_name]
         normalize_stats(user_id)
         save_data()
-        if from_global_command:
-            await send_message(user_id, "\n".join(messages), None)
-        else:
-        await send_message(user_id, "\n".join(messages), create_backpack_menu_keyboard())
+        kb = None if from_global_command else create_backpack_menu_keyboard()
+        await send_message(user_id, "\n".join(messages), kb)
         return
     for attr, value in effects.items():
         total_value = value * count
@@ -3118,11 +3010,9 @@ async def use_item(user_id):
         del backpack[item_name]
     normalize_stats(user_id)
     save_data()
-    if from_global_command:
-        await send_message(user_id, "\n".join(messages), None)
-    else:
-        await send_message(user_id, "\n".join(messages), create_backpack_menu_keyboard())
-async def apply_random_effect(user_id):
+    kb = None if from_global_command else create_backpack_menu_keyboard()
+    await send_message(user_id, "\n".join(messages), kb)
+def apply_random_effect(user_id):
     p = players[user_id]
     effects = [
         ("health", 0.5, "❤️ +0.5 здоровья"),
@@ -3136,9 +3026,7 @@ async def apply_random_effect(user_id):
     ]
     effect = random.choice(effects)
     attr, value, msg = effect
-    if attr == "money":
-        p["money"] = max(0, p.get("money", 0) + int(value))
-    elif attr == "health":
+    if attr == "health":
         p["health"] = max(0, min(10, p["health"] + value))
     elif attr == "radiation":
         p["radiation"] = max(0, min(10, p["radiation"] + value))
@@ -3148,1083 +3036,7 @@ async def apply_random_effect(user_id):
         p["stamina"] = max(0, min(10, p["stamina"] + value))
     save_data()
     return msg
-def find_player_by_mention_or_nickname(target):
-    target = target.strip()
-    if target.startswith('@'):
-        screen_name = target[1:].lower()
-        for uid, data in players.items():
-            if data.get("screen_name", "").lower() == screen_name:
-                return uid
-        return None
-    target_lower = target.lower()
-    for uid, data in players.items():
-        nickname = data.get("nickname", "")
-        if nickname.lower() == target_lower:
-            return uid
-    for uid, data in players.items():
-        nickname = data.get("nickname", "")
-        if target_lower in nickname.lower():
-            return uid
-    return None
-async def is_admin(user_id):
-    return user_id == 353430025 or user_id in admin_users
-def is_game_open():
-    for faction in factions:
-        if len(factions[faction]) < MAX_FACTION_SIZES[faction]:
-            return False
-    return True
-async def handle_global_commands(user_id):
-    text_original = text.strip()
-    text = text_original.lower()
-    words = text.split()
-    words_original = text_original.split()
-    if user_id in banned_users and not is_admin(user_id):
-        return True
-    if text == "инфо":
-        current_keyboard = None
-        state = players[user_id]["state"]
-        if state == STATE_IN_MENU:
-            current_keyboard = create_main_menu_keyboard(user_id)
-        elif state == STATE_IN_CAMP:
-            current_keyboard = create_camp_menu_keyboard()
-        elif state == STATE_IN_BACKPACK:
-            current_keyboard = create_backpack_menu_keyboard()
-        elif state == STATE_TRADER_MAIN:
-            current_keyboard = create_trader_main_keyboard()
-        elif state == STATE_TRADER_BUY_CATEGORY:
-            current_keyboard = create_trader_category_keyboard()
-        elif state == STATE_TRADER_SELL_CATEGORY:
-            current_keyboard = create_trader_sell_category_keyboard()
-        elif state == STATE_TRADER_BUY_EQUIPMENT:
-            current_keyboard = create_equipment_category_keyboard()
-        elif state == STATE_TRADER_SELL_EQUIPMENT_CONFIRM:
-            current_keyboard = create_equipment_sell_keyboard()
-        elif state == STATE_TRADER_REPAIR:
-            current_keyboard = create_repair_keyboard(user_id)
-        elif state == STATE_WAREHOUSE:
-            current_keyboard = create_warehouse_keyboard()
-        await send_message(user_id, format_camp_info(user_id), current_keyboard)
-        return True
-    if text == "*":
-        state = players[user_id]["state"]
-        if state in [STATE_TRANSITION_WAIT, STATE_RESTING]:
-            await send_message(user_id, "Команда * недоступна во время перехода или отдыха.", None)
-            return True
-        if state == STATE_IN_MENU:
-        await send_message(user_id, MAIN_MENU_TEXT, create_main_menu_keyboard(user_id))
-        elif state == STATE_IN_CAMP:
-        await send_message(user_id, format_camp_info(user_id), create_camp_menu_keyboard())
-        elif state == STATE_IN_BACKPACK:
-            upload_and_send_inventory(user_id)
-            return True
-        elif state == STATE_WAREHOUSE:
-            upload_and_send_warehouse_global(user_id)
-            return True
-        elif state == STATE_TRADER_MAIN:
-        await send_message(user_id, "Вы хотите что либо 💲 приобрести или 💱 продать?", create_trader_main_keyboard())
-        elif state == STATE_TRADER_BUY_CATEGORY:
-        await send_message(user_id, "Выберите категорию:", create_trader_category_keyboard())
-        elif state == STATE_TRADER_SELL_CATEGORY:
-        await send_message(user_id, "Выберите категорию:", create_trader_sell_category_keyboard())
-        elif state == STATE_TRADER_BUY_EQUIPMENT:
-        await send_message(user_id, "Выберите тип снаряжения:", create_equipment_category_keyboard())
-        elif state == STATE_TRADER_SELL_EQUIPMENT_CONFIRM:
-        await send_message(user_id, "Выберите категорию снаряжения для продажи:", create_equipment_sell_keyboard())
-        elif state == STATE_TRADER_BUY:
-            show_buy_provisions_menu(user_id)
-            return True
-        elif state == STATE_TRADER_SELL:
-            show_sell_provisions_menu(user_id)
-            return True
-        elif state == STATE_TRADER_REPAIR:
-            p = players[user_id]
-            money = p.get("money", 0)
-            repair_text = (
-                f"⚙️ Что собираетесь починить? 🧐\n"
-                f"❗ Ремонт на 1 единицу осуществляется за 15р\n"
-                f"💲 Деньги: {money}р")
-        await send_message(user_id, repair_text, create_repair_keyboard(user_id))
-            return True
-        else:
-            await send_message(user_id, "Команда * не поддерживается в этом состоянии.", None)
-        return True
-    if text == "2604":
-        current_state = players.get(user_id, {}).get("state")
-        if current_state in [STATE_TRANSITION_WAIT, STATE_HUNTING, STATE_HUNTING_SHOOTING]:
-            await send_message(user_id, "❌ Команда 2604 недоступна на данный момент.", None)
-        elif user_id in players:
-            players[user_id]["state"] = STATE_IN_MENU
-            save_data()
-        await send_message(user_id, "✅ Вы вернулись в главное меню.", create_main_menu_keyboard(user_id))
-        else:
-            await send_message(user_id, "❌ Вы не в игре.", None)
-        return True
-    if words and words[0] in ["исп", "использовать"] and len(words) >= 2:
-        item_part = " ".join(words[1:])
-        use_item(user_id, item_part, vk_session, from_global_command=True)
-        return True
-    if words and words[0] == "перевести" and len(words) >= 3:
-        try:
-            amount = int(words[1])
-            target_str = words[2]
-        except:
-            await send_message(user_id, "❌ Неверный формат. Пример: перевести 100 ник", None)
-            return True
-        if amount <= 0:
-            await send_message(user_id, "❌ Сумма должна быть больше 0.", None)
-            return True
-        target_uid = find_player_by_mention_or_nickname(target_str)
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден по нику.", None)
-            return True
-        if target_uid == user_id:
-            await send_message(user_id, "❌ Нельзя перевести деньги самому себе.", None)
-            return True
-        if target_uid in banned_users:
-            await send_message(user_id, "❌ Этот игрок заблокирован.", None)
-            return True
-        if players[user_id]["money"] < amount:
-            await send_message(user_id, f"❌ Недостаточно денег. У вас {players[user_id]['money']}р.", None)
-            return True
-        players[user_id]["money"] -= amount
-        players[target_uid]["money"] = players[target_uid].get("money", 0) + amount
-        sender_nickname = players[user_id]["nickname"]
-        save_data()
-        await send_message(user_id, f"✅ Переведено {amount}р игроку {players[target_uid]['nickname']}.", None)
-        await send_message(target_uid, f"📥 Вам перевёл(а) {sender_nickname}: {amount}р", None)
-        return True
-    if words and words[0] == "отправить":
-        target_uid = None
-        if reply_user_id:
-            if reply_user_id in players:
-                target_uid = reply_user_id
-        if len(words) >= 4 and not target_uid:
-            item_parts = []
-            amount = None
-            target_str = None
-            for i in range(len(words_original) - 1, 0, -1):
-                if target_str is None:
-                    target_str = words_original[i]
-                elif amount is None:
-                    try:
-                        amount = int(words_original[i])
-                    except:
-                        await send_message(user_id, "❌ Неверный формат. Пример: отправить хлеб 2 ник", None)
-                        return True
-                else:
-                    item_parts = words_original[1:i+1]
-                    break
-            if not item_parts or amount is None or target_str is None:
-                await send_message(user_id, "❌ Неверный формат. Пример: отправить хлеб 2 ник", None)
-                return True
-            item_name_original = " ".join(item_parts)
-            target_uid = find_player_by_mention_or_nickname(target_str)
-        elif reply_user_id and len(words) >= 3:
-            try:
-                amount = int(words[-1])
-                item_name_original = " ".join(words_original[1:-1])
-            except:
-                await send_message(user_id, "❌ Неверный формат. Пример: отправить хлеб 2 (ответом на сообщение)", None)
-                return True
-        else:
-            await send_message(user_id, "❌ Неверный формат. Пример: отправить хлеб 2 ник или ответом на сообщение", None)
-            return True
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден.", None)
-            return True
-        if target_uid == user_id:
-            await send_message(user_id, "❌ Нельзя отправить предмет самому себе.", None)
-            return True
-        if target_uid in banned_users:
-            await send_message(user_id, "❌ Этот игрок заблокирован.", None)
-            return True
-        found_item = None
-        for item in ITEM_EFFECTS.keys():
-            if item.lower() == item_name_original.lower():
-                found_item = item
-                break
-        if not found_item:
-            for art in ALL_ARTIFACTS:
-                if art.lower() == item_name_original.lower():
-                    found_item = art
-                    break
-        if not found_item:
-            for art in DONATION_ARTIFACTS:
-                if art.lower() == item_name_original.lower():
-                    found_item = art
-                    break
-        if not found_item:
-            await send_message(user_id, "❌ Неизвестный предмет.", None)
-            return True
-        backpack = players[user_id]["backpack"]
-        current_count = backpack.get(found_item, 0)
-        if current_count < amount:
-            await send_message(user_id, f"❌ У вас недостаточно предметов. Есть: {current_count}.", None)
-            return True
-        backpack[found_item] -= amount
-        if backpack[found_item] <= 0:
-            del backpack[found_item]
-        players[target_uid]["backpack"][found_item] = players[target_uid]["backpack"].get(found_item, 0) + amount
-        sender_nickname = players[user_id]["nickname"]
-        save_data()
-        await send_message(user_id, f"✅ Отправлено {found_item} x{amount} игроку {players[target_uid]['nickname']}.", None)
-        await send_message(target_uid, f"📥 Вам отправил(а) {sender_nickname}: {found_item} x{amount}", None)
-        return True
-    if text.lower().startswith("инфо "):
-        info_parts = text.lower()[5:].strip().split()
-        if len(info_parts) < 2:
-            await send_message(user_id, "❌ Формат: инфо [локация] [точка]\nПример: инфо кордон б1\nСокращения: тд = Тёмная долина", None)
-            return True
-        info_point = info_parts[-1].upper()
-        info_loc_input = " ".join(info_parts[:-1])
-        location_map = {"кордон": "Кордон", "свалка": "Свалка", "тёмная долина": "Тёмная долина", "темная долина": "Тёмная долина", "тд": "Тёмная долина", "поляна": "Поляна"}
-        info_location = location_map.get(info_loc_input)
-        if not info_location:
-        await send_message(user_id, "❌ Неизвестная локация.\nДоступно: Кордон, Свалка, тд, Поляна", None)
-            return True
-        if not is_valid_point(info_location, info_point):
-            await send_message(user_id, f"❌ Точка {info_point} не существует на локации {info_location}.", None)
-            return True
-        owner = get_territory_owner(info_location, info_point)
-        player_faction = players[user_id]["faction"]
-        if owner != player_faction:
-            await send_message(user_id, "❌ Эта территория не принадлежит вашей группировке.", None)
-            return True
-        squads_on_point = get_territory_squads(info_location, info_point)
-        ptype = POINT_TYPES.get(info_point, "Территория")
-        min_req = MIN_SQUADS_FOR_POINT.get(ptype, 1)
-        await send_message(user_id, f"📍 {info_location} {info_point}\n👥 Сквадов: {squads_on_point}\n🏷️ Тип: {ptype}\n📋 Минимум для удержания: {min_req}", None)
-        return True
-    if text.lower().startswith("повесить "):
-        art_name = text[9:].strip()
-        found_art = None
-        for art in ALL_ARTIFACTS:
-            if art.lower() == art_name.lower():
-                found_art = art
-                break
-        if not found_art:
-            await send_message(user_id, "❌ Неизвестный артефакт.", None)
-            return True
-        if players[user_id]["backpack"].get(found_art, 0) <= 0:
-            await send_message(user_id, "❌ У вас нет этого артефакта.", None)
-            return True
-        belt = players[user_id].get("belt", [None, None, None])
-        for i in range(3):
-            if belt[i] is None:
-                belt[i] = found_art
-                players[user_id]["belt"] = belt
-                players[user_id]["backpack"][found_art] -= 1
-                if players[user_id]["backpack"][found_art] <= 0:
-                    del players[user_id]["backpack"][found_art]
-                save_data()
-                await send_message(user_id, f"✅ {found_art} повешен на пояс {i + 1}.", None)
-                return True
-        await send_message(user_id, "❌ Все пояса заняты.", None)
-        return True
-    if text.lower().startswith("снять "):
-        art_name = text[6:].strip()
-        belt = players[user_id].get("belt", [None, None, None])
-        for i in range(3):
-            if belt[i] and belt[i].lower() == art_name.lower():
-                art = belt[i]
-                belt[i] = None
-                players[user_id]["belt"] = belt
-                players[user_id]["backpack"][art] = players[user_id]["backpack"].get(art, 0) + 1
-                save_data()
-                await send_message(user_id, f"✅ {art} снят с пояса {i + 1}.", None)
-                return True
-        await send_message(user_id, "❌ Этот артефакт не на поясе.", None)
-        return True
-    if text == "/бог" and is_admin(user_id):
-        p = players[user_id]
-        p["money"] += 1000
-        p["health"] = 10
-        p["radiation"] = 0
-        p["hunger"] = 0
-        p["stamina"] = 10
-        save_data()
-        await send_message(user_id, "✅ Вы получили 1000р и восстановили все характеристики.", None)
-        return True
-    if text.startswith("/лидер ") and is_admin(user_id):
-        parts = text_original.split(maxsplit=1)
-        if len(parts) < 2:
-            await send_message(user_id, "❌ Укажите ник игрока.", None)
-            return True
-        target_nick = parts[1].strip()
-        target_uid = find_player_by_mention_or_nickname(target_nick)
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден.", None)
-            return True
-        target_faction = players[target_uid]["faction"]
-        set_faction_leader(target_faction, target_uid)
-        await send_message(user_id, f"✅ {target_nick} назначен лидером группировки {target_faction}.", None)
-        await send_message(target_uid, f"👑 Вы назначены лидером группировки {target_faction}!", None)
-        return True
-    if text.startswith("/сет ") and is_admin(user_id):
-        parts = text_original.split(maxsplit=1)
-        if len(parts) < 2:
-            await send_message(user_id, "❌ Укажите ник игрока.", None)
-            return True
-        target_nick = parts[1].strip()
-        target_uid = find_player_by_mention_or_nickname(target_nick)
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден.", None)
-            return True
-        all_items = list(ITEM_EFFECTS.keys()) + ALL_ARTIFACTS
-        for item in all_items:
-            players[target_uid]["backpack"][item] = players[target_uid]["backpack"].get(item, 0) + 1
-        save_data()
-        await send_message(user_id, f"✅ Игроку {target_nick} выданы все предметы по 1 шт.", None)
-        return True
-    if text.startswith("/гив ") and is_admin(user_id):
-        parts = text_original.split()
-        if len(parts) < 3:
-            await send_message(user_id, "❌ Формат: /гив [предмет] [кол-во] [ник]\nНик опционален. Пример: /гив хлеб 5", None)
-            return True
-        target_uid = None
-        count = None
-        item_end_index = len(parts)
-        for i in range(len(parts) - 1, 1, -1):
-            potential_nick = " ".join(parts[i:])
-            found_uid = find_player_by_mention_or_nickname(potential_nick)
-            if found_uid:
-                target_uid = found_uid
-                try:
-                    count = int(parts[i - 1])
-                    item_end_index = i - 1
-                    break
-                except:
-                    continue
-        if target_uid is None:
-            try:
-                count = int(parts[-1])
-                item_end_index = len(parts) - 1
-                target_uid = user_id
-            except:
-                await send_message(user_id, "❌ Неверный формат. Укажите количество.", None)
-                return True
-        if count is None or count <= 0:
-            await send_message(user_id, "❌ Количество должно быть положительным числом.", None)
-            return True
-        item_name = " ".join(parts[1:item_end_index]).lower()
-        if item_name == "деньги":
-            players[target_uid]["money"] = players[target_uid].get("money", 0) + count
-            save_data()
-            await send_message(user_id, f"✅ Выдано {count}р игроку {players[target_uid]['nickname']}.", None)
-            return True
-        found_item = None
-        for item in ITEM_EFFECTS.keys():
-            if item.lower() == item_name:
-                found_item = item
-                break
-        if not found_item:
-            for art in ALL_ARTIFACTS:
-                if art.lower() == item_name:
-                    found_item = art
-                    break
-        if not found_item:
-            await send_message(user_id, "❌ Предмет не найден.", None)
-            return True
-        players[target_uid]["backpack"][found_item] = players[target_uid]["backpack"].get(found_item, 0) + count
-        save_data()
-        await send_message(user_id, f"✅ Выдано {found_item} x{count} игроку {players[target_uid]['nickname']}.", None)
-        return True
-    if text.startswith("/дэл ") and is_admin(user_id):
-        parts = text_original.split()
-        if len(parts) < 3:
-            await send_message(user_id, "❌ Формат: /дэл [предмет] [кол-во] [ник]\nНик опционален. Пример: /дэл хлеб 5", None)
-            return True
-        target_uid = None
-        count = None
-        item_end_index = len(parts)
-        for i in range(len(parts) - 1, 1, -1):
-            potential_nick = " ".join(parts[i:])
-            found_uid = find_player_by_mention_or_nickname(potential_nick)
-            if found_uid:
-                target_uid = found_uid
-                try:
-                    count = int(parts[i - 1])
-                    item_end_index = i - 1
-                    break
-                except:
-                    continue
-        if target_uid is None:
-            try:
-                count = int(parts[-1])
-                item_end_index = len(parts) - 1
-                target_uid = user_id
-            except:
-                await send_message(user_id, "❌ Неверный формат. Укажите количество.", None)
-                return True
-        if count is None or count <= 0:
-            await send_message(user_id, "❌ Количество должно быть положительным числом.", None)
-            return True
-        item_name = " ".join(parts[1:item_end_index]).lower()
-        if item_name == "деньги":
-            players[target_uid]["money"] = max(0, players[target_uid].get("money", 0) - count)
-            save_data()
-            await send_message(user_id, f"✅ Удалено {count}р у игрока {players[target_uid]['nickname']}.", None)
-            return True
-        found_item = None
-        for item in ITEM_EFFECTS.keys():
-            if item.lower() == item_name:
-                found_item = item
-                break
-        if not found_item:
-            for art in ALL_ARTIFACTS:
-                if art.lower() == item_name:
-                    found_item = art
-                    break
-        if not found_item:
-            await send_message(user_id, "❌ Предмет не найден.", None)
-            return True
-        current = players[target_uid]["backpack"].get(found_item, 0)
-        players[target_uid]["backpack"][found_item] = max(0, current - count)
-        if players[target_uid]["backpack"][found_item] <= 0:
-            del players[target_uid]["backpack"][found_item]
-        save_data()
-        await send_message(user_id, f"✅ Удалено {found_item} x{count} у игрока {players[target_uid]['nickname']}.", None)
-        return True
-    if text.startswith("/выброс") and is_admin(user_id):
-        global emission_counter, EMISSION_MAX
-        parts = text.split()
-        if len(parts) >= 2:
-            try:
-                new_max = int(parts[1])
-                if new_max < 50 or new_max > 10000:
-                    await send_message(user_id, "❌ Лимит должен быть от 50 до 10000.", None)
-                    return True
-                EMISSION_MAX = new_max
-                save_data()
-                await send_message(user_id, f"✅ Лимит выброса изменён на {EMISSION_MAX}.", None)
-            except:
-                await send_message(user_id, "❌ Укажите число. Пример: /выброс 600", None)
-            return True
-        else:
-            emission_counter = EMISSION_MAX - 15
-            save_data()
-            await send_message(user_id, f"✅ Шкала выброса установлена на {emission_counter}/{EMISSION_MAX}.", None)
-            return True
-    if text.startswith("/донат ") and user_id == 353430025:
-        parts = text_original.split()
-        if len(parts) < 3:
-            await send_message(user_id, "❌ Формат: /донат [день/неделя/месяц] [пончик/стейк] [ник]", None)
-            return True
-        duration_str = parts[1].lower()
-        if duration_str not in DONATION_DURATIONS:
-        await send_message(user_id, "❌ Неизвестная длительность. Доступно: день, неделя, месяц", None)
-            return True
-        artifact_input = parts[2].lower()
-        artifact = None
-        for art in DONATION_ARTIFACTS:
-            if art.lower() == artifact_input:
-                artifact = art
-                break
-        if not artifact:
-        await send_message(user_id, "❌ Неизвестный артефакт. Доступно: Пончик, Стейк", None)
-            return True
-        target_uid = user_id
-        if len(parts) >= 4:
-            target_nick = parts[3].strip()
-            found_uid = find_player_by_mention_or_nickname(target_nick)
-            if not found_uid:
-                await send_message(user_id, "❌ Игрок не найден.", None)
-                return True
-            target_uid = found_uid
-        duration = DONATION_DURATIONS[duration_str]
-        p = players[target_uid]
-        p["donation_end_time"] = time.time() + duration
-        p["donation_artifact"] = artifact
-        p["backpack"][artifact] = p["backpack"].get(artifact, 0) + 1
-        bonus_msg = ""
-        if duration_str == "неделя":
-            p["backpack"]["научная аптечка"] = p["backpack"].get("научная аптечка", 0) + 1
-            p["backpack"]["антирад"] = p["backpack"].get("антирад", 0) + 1
-            p["backpack"]["консерва"] = p["backpack"].get("консерва", 0) + 1
-            p["backpack"]["геркулес"] = p["backpack"].get("геркулес", 0) + 1
-            p["money"] = p.get("money", 0) + 100
-            bonus_msg = "\n\n🎁 Бонусы за неделю:\n• Научная аптечка x1\n• Антирад x1\n• Консерва x1\n• Геркулес x1\n• 💲 100р"
-        save_data()
-        target_name = players[target_uid]["nickname"]
-        end_time_str = time.strftime('%d.%m.%Y %H:%M', time.localtime(p["donation_end_time"]))
-        await send_message(user_id, f"✅ Донат активирован игроку {target_name} на {duration_str}!\n🎁 Артефакт: {artifact}\n⏰ Действует до: {end_time_str}{bonus_msg}", None)
-        if target_uid != user_id:
-            await send_message(target_uid, f"🎁 Вам активирован донат на {duration_str}!\n🌕 Артефакт: {artifact}\n⏰ Действует до: {end_time_str}{bonus_msg}", None)
-        return True
-    if text.startswith("/фото") and user_id == 353430025:
-        parts = text_original.split(maxsplit=1)
-        target_uid = None
-        if len(parts) >= 2:
-            target_nick = parts[1].strip()
-            for uid, data in players.items():
-                if data.get("nickname", "").lower() == target_nick.lower():
-                    target_uid = uid
-                    break
-            if not target_uid:
-                for uid, data in players.items():
-                    nickname = data.get("nickname", "")
-                    if target_nick.lower() in nickname.lower():
-                        target_uid = uid
-                        break
-            if not target_uid:
-                all_nicks = [f"'{p.get('nickname', '?')}'" for p in players.values() if p.get('nickname')]
-        await send_message(user_id, f"❌ Игрок не найден.\n\n📋 Ники:\n{', '.join(all_nicks[:15])}", None)
-                return True
-        elif reply_user_id and reply_user_id in players:
-            target_uid = reply_user_id
-        else:
-            await send_message(user_id, "❌ Ответьте на сообщение игрока или укажите ник", None)
-            return True
-        players[user_id]["pending_photo_target"] = target_uid
-        await send_message(user_id, f"📷 Прикрепите фото для игрока {players[target_uid]['nickname']}:", None)
-        return True
-    if text == "/команды" and is_admin(user_id):
-        faction_info = "\n👥 ИГРОКИ В ГРУППИРОВКАХ:\n"
-        for faction in ["🛡️ Долг", "☦️ Грех", "☢️ Одиночки"]:
-            current = len(factions.get(faction, []))
-            limit = MAX_FACTION_SIZES.get(faction, 5)
-            faction_info += f"\n{faction}: {current}/{limit}"
-        donators_list = []
-        for uid, p in players.items():
-            if has_active_donation(uid):
-                end_time = p.get("donation_end_time", 0)
-                end_str = time.strftime('%d.%m.%Y', time.localtime(end_time))
-                donators_list.append(f"• {p.get('nickname', '?')} (до {end_str})")
-        donators_info = "\n\n💎 ДОНАТЕРЫ:\n" + ("\n".join(donators_list) if donators_list else "Нет активных")
-        admins_list = []
-        if 353430025 in players:
-            admins_list.append(f"• {players[353430025].get('nickname', '?')} (разработчик)")
-        for uid in admin_users:
-            if uid in players and uid != 353430025:
-                admins_list.append(f"• {players[uid].get('nickname', '?')}")
-        admins_info = "\n\n👑 АДМИНЫ:\n" + ("\n".join(admins_list) if admins_list else "Нет")
-        admin_help = f"""📋 АДМИН КОМАНДЫ:
-{faction_info}{donators_info}{admins_info}
-
-🔹 /бог
-   Получить 1000р и восстановить все характеристики
-
-🔹 /лидер [ник]
-   Назначить игрока лидером его группировки
-
-🔹 /сет [ник]
-   Выдать игроку все предметы по 1 шт
-
-🔹 /гив [предмет] [кол-во] [ник]
-   Выдать предмет игроку (ник опционально)
-   Пример: /гив хлеб 5 НикИгрока
-   Пример: /гив деньги 1000
-
-🔹 /дэл [предмет] [кол-во] [ник]
-   Удалить предмет у игрока
-   Пример: /дэл хлеб 5 НикИгрока
-
-🔹 /выброс [лимит]
-   Без аргумента - запустить выброс
-   С числом - изменить лимит выброса
-   Пример: /выброс 600
-
-🔹 /донат [день/неделя/месяц] [пончик/стейк] [ник]
-   Активировать донат игроку
-   Пример: /донат день пончик НикИгрока
-
-🔹 /фото [ник]
-   Установить аватарку игроку (прикрепить фото следующим сообщением)
-
-🔹 /лимит [группировка] [число]
-   Изменить лимит игроков в группировке
-   Пример: /лимит долг 6
-   Пример: /лимит одиночки 4
-
-🔹 /сменитьгп [ник] [группировка]
-   Сменить группировку игроку
-   Пример: /сменитьгп НикИгрока долг
-
-🔹 /телепорт [ник] [локация] [точка]
-   Переместить игрока на локацию
-   Пример: /телепорт НикИгрока Кордон Б1
-
-🔹 /ник [старый_ник] [новый_ник]
-   Изменить ник игрока (автопоиск)
-   Пример: /ник Деловой Гангстер Крутой Босс
-
-🔹 /бан [ник] [причина]
-   Заблокировать игрока в боте
-   Пример: /бан Плохой Игрок Нарушение правил
-
-🔹 /разбан [ник]
-   Разблокировать игрока
-   Пример: /разбан Плохой Игрок
-
-🔹 /skip_cd
-   Сбросить таймер перехода
-
-🔹 /reset_all
-   Сбросить все данные игры
-
-🔹 /админ [ник]
-   Назначить игрока админом (только разработчик)
-
-🔹 /деладмин [ник]
-   Снять игрока с админки (только разработчик)
-
-🔹 2604
-   Вернуться в главное меню (для всех)
-   
-🔹 /последний_рубеж
-   Активировать режим с ботом-противником (только разработчик)
-
-🔹 /зомби
-   Показать статус бота Зомбированных
-
-🔹 /зомби_кд [секунды]
-   Изменить интервал действий зомбированных
-   Пример: /зомби_кд 900 (15 минут)
-   
-🔹 /рыцарь [ник]
-   Экипировать игрока лучшим снаряжением Долга и +500 сквадов
-   Пример: /рыцарь НикИгрока
-
-🔹 /зомби_сила [+-число]
-   Добавить/убрать бонусные сквады зомби
-   Пример: /зомби_сила +50"""
-        await send_message(user_id, admin_help, None)
-        return True
-    if text.startswith("/лимит ") and is_admin(user_id):
-        parts = text_original.split()
-        if len(parts) < 3:
-        await send_message(user_id, "❌ Формат: /лимит [группировка] [число]\nГруппировки: долг, грех, одиночки", None)
-            return True
-        faction_input = parts[1].lower()
-        try:
-            new_limit = int(parts[2])
-        except:
-            await send_message(user_id, "❌ Лимит должен быть числом.", None)
-            return True
-        if new_limit < 1 or new_limit > 50:
-            await send_message(user_id, "❌ Лимит должен быть от 1 до 50.", None)
-            return True
-        faction_map = {"долг": "🛡️ Долг", "грех": "☦️ Грех", "одиночки": "☢️ Одиночки"}
-        if faction_input not in faction_map:
-        await send_message(user_id, "❌ Неизвестная группировка. Доступно: долг, грех, одиночки", None)
-            return True
-        faction_name = faction_map[faction_input]
-        MAX_FACTION_SIZES[faction_name] = new_limit
-        save_data()
-        await send_message(user_id, f"✅ Лимит группировки {faction_name} изменён на {new_limit}.", None)
-        return True
-    if text.startswith("/сменитьгп") and is_admin(user_id):
-        parts = text_original.split()
-        if len(parts) < 2:
-        await send_message(user_id, "❌ Формат: /сменитьгп [ник] [группировка]\nГруппировки: долг, грех, одиночки, зомби\nИли ответьте на сообщение: /сменитьгп [группировка]", None)
-            return True
-        faction_map = {"долг": "🛡️ Долг", "грех": "☦️ Грех", "одиночки": "☢️ Одиночки", "зомби": ZOMBIE_FACTION, "зомбированные": ZOMBIE_FACTION}
-        if reply_user_id and reply_user_id in players and len(parts) == 2:
-            target_uid = reply_user_id
-            faction_input = parts[1].lower()
-        elif len(parts) >= 3:
-            target_nick = " ".join(parts[1:-1])
-            faction_input = parts[-1].lower()
-            target_uid = find_player_by_mention_or_nickname(target_nick)
-        else:
-            await send_message(user_id, "❌ Формат: /сменитьгп [ник] [группировка]", None)
-            return True
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден.", None)
-            return True
-        if faction_input not in faction_map:
-        await send_message(user_id, "❌ Неизвестная группировка. Доступно: долг, грех, одиночки, зомби", None)
-            return True
-        new_faction = faction_map[faction_input]
-        old_faction = players[target_uid].get("faction")
-        if old_faction and target_uid in factions.get(old_faction, []):
-            factions[old_faction].remove(target_uid)
-        players[target_uid]["faction"] = new_faction
-        if new_faction not in factions:
-            factions[new_faction] = []
-        if target_uid not in factions[new_faction]:
-            factions[new_faction].append(target_uid)
-        save_data()
-        await send_message(user_id, f"✅ Игрок {players[target_uid]['nickname']} переведён в {new_faction}.", None)
-        await send_message(target_uid, f"⚠️ Вас перевели в группировку {new_faction}!", None)
-        return True
-    if text.startswith("/телепорт ") and is_admin(user_id):
-        parts = text_original.split()
-        if len(parts) < 4:
-        await send_message(user_id, "❌ Формат: /телепорт [ник] [локация] [точка]\nЛокации: Кордон, Свалка, тд (Тёмная долина), Поляна", None)
-            return True
-        target_nick = parts[1]
-        point = parts[-1].upper()
-        location_parts = parts[2:-1]
-        location_input = " ".join(location_parts).lower()
-        target_uid = find_player_by_mention_or_nickname(target_nick)
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден.", None)
-            return True
-        location_map = {
-            "кордон": "Кордон",
-            "свалка": "Свалка",
-            "тёмная долина": "Тёмная долина",
-            "темная долина": "Тёмная долина",
-            "тд": "Тёмная долина",
-            "поляна": "Поляна"
-        }
-        location = location_map.get(location_input)
-        if not location:
-        await send_message(user_id, "❌ Неизвестная локация.\nДоступно: Кордон, Свалка, тд (Тёмная долина), Поляна", None)
-            return True
-        if not is_valid_point(location, point):
-            await send_message(user_id, f"❌ Точка {point} не существует на локации {location}.", None)
-            return True
-        players[target_uid]["location"] = location
-        players[target_uid]["point"] = point
-        players[target_uid]["transition_end_time"] = None
-        if players[target_uid].get("state") == STATE_TRANSITION_WAIT:
-            players[target_uid]["state"] = STATE_IN_MENU
-        save_data()
-        await send_message(user_id, f"✅ Игрок {target_nick} телепортирован на {location} {point}.", None)
-        await send_message(target_uid, f"⚡ Вас телепортировали на {location} {point}!", None)
-        return True
-    if text.startswith("/ник ") and user_id == 353430025:
-        content = text_original[5:].strip()
-        if " > " in content:
-            parts = content.split(" > ", 1)
-            old_nick = parts[0].strip()
-            new_nick = parts[1].strip()
-            target_uid = None
-            for uid, data in players.items():
-                if data.get("nickname", "").lower() == old_nick.lower():
-                    target_uid = uid
-                    break
-            if not target_uid:
-                for uid, data in players.items():
-                    if old_nick.lower() in data.get("nickname", "").lower():
-                        target_uid = uid
-                        break
-            if not target_uid:
-                all_nicks = [f"'{p.get('nickname', '?')}'" for p in players.values() if p.get('nickname')]
-        await send_message(user_id, f"❌ Игрок не найден.\n\n📋 Ники: {', '.join(all_nicks[:10])}", None)
-                return True
-            old_nickname = players[target_uid]["nickname"]
-            players[target_uid]["nickname"] = new_nick
-            save_data()
-            await send_message(user_id, f"✅ Ник изменён:\n{old_nickname} → {new_nick}", None)
-            await send_message(target_uid, f"📝 Ваш ник изменён на: {new_nick}", None)
-            return True
-        if reply_user_id and reply_user_id in players:
-            new_nick = content
-            if not new_nick:
-                await send_message(user_id, "❌ Укажите новый ник", None)
-                return True
-            old_nickname = players[reply_user_id]["nickname"]
-            players[reply_user_id]["nickname"] = new_nick
-            save_data()
-            await send_message(user_id, f"✅ Ник изменён:\n{old_nickname} → {new_nick}", None)
-            await send_message(reply_user_id, f"📝 Ваш ник изменён на: {new_nick}", None)
-            return True
-        await send_message(user_id, "❌ Ответьте на сообщение игрока или используйте:\n/ник старый > новый", None)
-        return True
-    if text.lower() == "информация":
-        await send_message(user_id, GAME_INFO_TEXT, None)
-        return True
-    if text.startswith("/бан ") and is_admin(user_id):
-        content = text_original[5:].strip()
-        if not content:
-            await send_message(user_id, "❌ Укажите ник игрока.\nФормат: /бан [ник] [причина]", None)
-            return True
-        parts = content.split(maxsplit=1)
-        target_nick = parts[0]
-        reason = parts[1] if len(parts) > 1 else "Причина не указана"
-        target_uid = find_player_by_mention_or_nickname(target_nick)
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден.", None)
-            return True
-        if target_uid == user_id:
-            await send_message(user_id, "❌ Нельзя забанить себя.", None)
-            return True
-        if target_uid == 353430025:
-            await send_message(user_id, "❌ Нельзя забанить разработчика.", None)
-            return True
-        if target_uid in banned_users:
-            await send_message(user_id, "❌ Игрок уже забанен.", None)
-            return True
-        target_faction = players[target_uid].get("faction")
-        if target_faction and target_uid in factions.get(target_faction, []):
-            factions[target_faction].remove(target_uid)
-        banned_users[target_uid] = reason
-        save_data()
-        await send_message(user_id, f"✅ Игрок {players[target_uid]['nickname']} забанен.\n📝 Причина: {reason}", None)
-        await send_message(target_uid, f"🚫 Вы были заблокированы в игре.\n📝 Причина: {reason}", None)
-        return True
-    if text.startswith("/разбан ") and is_admin(user_id):
-        target_nick = text_original[8:].strip()
-        if not target_nick:
-            await send_message(user_id, "❌ Укажите ник игрока.", None)
-            return True
-        target_uid = find_player_by_mention_or_nickname(target_nick)
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден.", None)
-            return True
-        if target_uid not in banned_users:
-            await send_message(user_id, "❌ Игрок не забанен.", None)
-            return True
-        del banned_users[target_uid]
-        save_data()
-        await send_message(user_id, f"✅ Игрок {players[target_uid]['nickname']} разбанен.", None)
-        await send_message(target_uid, "✅ Вы были разблокированы в игре.", None)
-        return True
-    if text.startswith("/админ ") and user_id == 353430025:
-        target_nick = text_original[7:].strip()
-        if not target_nick:
-            await send_message(user_id, "❌ Укажите ник игрока.", None)
-            return True
-        target_uid = find_player_by_mention_or_nickname(target_nick)
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден.", None)
-            return True
-        if target_uid == user_id:
-            await send_message(user_id, "❌ Вы уже главный разработчик.", None)
-            return True
-        if target_uid in admin_users:
-            await send_message(user_id, "❌ Игрок уже админ.", None)
-            return True
-        admin_users.append(target_uid)
-        save_data()
-        await send_message(user_id, f"✅ Игрок {players[target_uid]['nickname']} назначен админом.", None)
-        await send_message(target_uid, "👑 Вы назначены администратором бота!", None)
-        return True
-    if text.startswith("/деладмин ") and user_id == 353430025:
-        target_nick = text_original[10:].strip()
-        if not target_nick:
-            await send_message(user_id, "❌ Укажите ник игрока.", None)
-            return True
-        target_uid = find_player_by_mention_or_nickname(target_nick)
-        if not target_uid:
-            await send_message(user_id, "❌ Игрок не найден.", None)
-            return True
-        if target_uid not in admin_users:
-            await send_message(user_id, "❌ Игрок не является админом.", None)
-            return True
-        admin_users.remove(target_uid)
-        save_data()
-        await send_message(user_id, f"✅ Игрок {players[target_uid]['nickname']} снят с админки.", None)
-        await send_message(target_uid, "⚠️ Вы больше не администратор бота.", None)
-        return True
-    if text == "/инв" or text == "инв":
-        p = players[user_id]
-        backpack = p.get("backpack", {})
-        money = p.get("money", 0)
-        if not backpack or all(v <= 0 for v in backpack.values()):
-            items_str = "Пусто"
-        else:
-            items_list = []
-            for item, count in backpack.items():
-                if count > 0:
-                    items_list.append(f"• {item}: {count}")
-            items_str = "\n".join(items_list)
-        msg = f"🎒 Инвентарь игрока {p.get('nickname', 'Неизвестный')}:\n\n{items_str}\n\n💲 Деньги: {money}р"
-        await send_message(user_id, msg, None)
-        return True
-    if text == "/сон" or text == "сон":
-        p = players[user_id]
-        if p.get("state") != STATE_RESTING:
-            await send_message(user_id, "❌ Вы не отдыхаете.", None)
-            return True
-        start_time = p.get("rest_start_time")
-        if not start_time:
-            await send_message(user_id, "❌ Ошибка: время начала отдыха не найдено.", None)
-            return True
-        current_time = time.time()
-        elapsed = current_time - start_time
-        initial = p.get("initial_stamina", p["stamina"])
-        belt_bonus = apply_belt_effects_on_rest(user_id)
-        donation_bonus = 1 if has_active_donation(user_id) else 0
-        total_bonus = 1 + belt_bonus + donation_bonus
-        elapsed_intervals = int(elapsed // 360)
-        current_stamina = min(10, initial + elapsed_intervals * total_bonus)
-        seconds_in_current_interval = elapsed % 360
-        seconds_to_next = int(360 - seconds_in_current_interval)
-        next_mins = seconds_to_next // 60
-        next_secs = seconds_to_next % 60
-        if current_stamina >= 10:
-            total_remaining = 0
-        else:
-            stamina_after_next = min(10, current_stamina + total_bonus)
-            if stamina_after_next >= 10:
-                total_remaining = seconds_to_next
-            else:
-                remaining_after_next = 10 - stamina_after_next
-                intervals_after_next = int(remaining_after_next / total_bonus)
-                if remaining_after_next % total_bonus > 0:
-                    intervals_after_next += 1
-                total_remaining = seconds_to_next + intervals_after_next * 360
-        total_mins = total_remaining // 60
-        total_secs = total_remaining % 60
-        msg = f"😴 Статус отдыха:\n"
-        msg += f"⚡ Текущая выносливость: {current_stamina}/10\n"
-        msg += f"🔋 Восстановление за 6 мин: +{total_bonus}\n"
-        msg += f"⏱️ До следующего восстановления: {next_mins} мин {next_secs} сек\n"
-        msg += f"⏱️ До полного восстановления: {total_mins} мин {total_secs} сек"
-        await send_message(user_id, msg, None)
-        return True
-    if text == "/последний_рубеж" and user_id == 353430025:
-        init_last_stand_mode()
-        for uid in players:
-            if uid in banned_users:
-                continue
-            faction = players[uid].get("faction")
-            if faction and faction != ZOMBIE_FACTION:
-        await send_message(uid, "🧟 РЕЖИМ ПОСЛЕДНИЙ РУБЕЖ АКТИВИРОВАН!\n\n⚠️ Все группировки перемещены на Кордон!\n🧟 Зомбированные захватили Свалку, Поляну и Тёмную долину!\n\n⚔️ Объединитесь для выживания!", None)
-        try:
-            await api.messages.send(peer_id=GAME_CHAT_ID,  message=🧟 РЕЖИМ ПОСЛЕДНИЙ РУБЕЖ АКТИВИРОВАН!\n\nЗомбированные атакуют Зону!,  random_id=random.randint(1,  2**31))
-        except:
-            pass
-        await send_message(user_id, "✅ Режим Последний Рубеж активирован!", None)
-        return True
-    if text == "/зомби" and is_admin(user_id):
-        if not LAST_STAND_MODE:
-            await send_message(user_id, "❌ Режим Последний Рубеж не активен.", None)
-            return True
-        await send_message(user_id, get_zombie_status(), None)
-        return True
-    if text.startswith("/зомби_кд") and is_admin(user_id):
-        global ZOMBIE_ACTION_INTERVAL
-        parts = text.split()
-        if len(parts) >= 2:
-            try:
-                new_interval = int(parts[1])
-                if new_interval < 60 or new_interval > 7200:
-                    await send_message(user_id, "❌ Интервал должен быть от 60 до 7200 секунд.", None)
-                    return True
-                ZOMBIE_ACTION_INTERVAL = new_interval
-                save_data()
-                mins = new_interval // 60
-                secs = new_interval % 60
-                await send_message(user_id, f"✅ Интервал действий зомбированных: {mins} мин {secs} сек.", None)
-            except:
-                await send_message(user_id, "❌ Укажите число секунд. Пример: /зомби_кд 900", None)
-            return True
-        else:
-            mins = ZOMBIE_ACTION_INTERVAL // 60
-            secs = ZOMBIE_ACTION_INTERVAL % 60
-            await send_message(user_id, f"⏱️ Текущий интервал: {mins} мин {secs} сек.\nИспользуйте: /зомби_кд [секунды]", None)
-            return True
-    if text == "/зомби_цель":
-        if not LAST_STAND_MODE:
-            await send_message(user_id, "❌ Режим Последний Рубеж не активен.", None)
-            return True
-        if players[user_id].get("faction") != ZOMBIE_FACTION:
-            await send_message(user_id, "❌ Вы не в группировке Зомбированных.", None)
-            return True
-        leader = get_faction_leader(ZOMBIE_FACTION)
-        if leader != user_id and not is_admin(user_id):
-            await send_message(user_id, "❌ Только лидер зомбированных может управлять ботом.", None)
-            return True
-        mode = zombie_bot.get("mode", "normal")
-        priority = zombie_bot.get("priority_target")
-        msg = f"🧟 УПРАВЛЕНИЕ ЗОМБИРОВАННЫМИ\n\n🎯 Текущий режим: {mode}\n🎯 Приоритетная цель: {priority if priority else 'не установлена'}\n\nВыберите режим работы бота:"
-        players[user_id]["state"] = "zombie_control"
-        save_data()
-        await send_message(user_id, msg, create_zombie_control_keyboard())
-        return True
-    if text.startswith("/зомби_приоритет ") and is_admin(user_id):
-        if not LAST_STAND_MODE:
-            await send_message(user_id, "❌ Режим Последний Рубеж не активен.", None)
-            return True
-        parts = text.split()
-        if len(parts) < 3:
-            await send_message(user_id, "❌ Формат: /зомби_приоритет [локация] [точка]\nПример: /зомби_приоритет Кордон Б1", None)
-            return True
-        point = parts[-1].upper()
-        loc_input = " ".join(parts[1:-1]).lower()
-        location_map = {"кордон": "Кордон", "свалка": "Свалка", "тёмная долина": "Тёмная долина", "темная долина": "Тёмная долина", "тд": "Тёмная долина", "поляна": "Поляна"}
-        location = location_map.get(loc_input)
-        if not location:
-            await send_message(user_id, "❌ Неизвестная локация.", None)
-            return True
-        if not is_valid_point(location, point):
-            await send_message(user_id, f"❌ Точка {point} не существует на {location}.", None)
-            return True
-        zombie_bot["priority_target"] = (location, point)
-        save_data()
-        await send_message(user_id, f"✅ Приоритетная цель: {location} {point}", None)
-        return True
-    if text == "/последний_рубеж2" and user_id == 353430025:
-        init_last_stand_mode_v2()
-        for uid in players:
-            if uid in banned_users:
-                continue
-            faction = players[uid].get("faction")
-            if faction and faction != ZOMBIE_FACTION:
-                await send_message(uid, "🧟 РЕЖИМ ПОСЛЕДНИЙ РУБЕЖ v2 АКТИВИРОВАН!\n\n⚠️ Группировки на своих базах!\n🧟 Зомбированные захватили Поляну с силой 100!\n\n⚔️ Объединитесь для выживания!", None)
-        try:
-            await api.messages.send(peer_id=GAME_CHAT_ID,  message=🧟 РЕЖИМ ПОСЛЕДНИЙ РУБЕЖ v2!\n\nЗомбированные на Поляне с силой 100!,  random_id=random.randint(1,  2**31))
-        except:
-            pass
-        await send_message(user_id, "✅ Режим Последний Рубеж v2 активирован!", None)
-        return True
-    if text.startswith("/зомби_сила") and is_admin(user_id):
-        if not LAST_STAND_MODE:
-            await send_message(user_id, "❌ Режим Последний Рубеж не активен.", None)
-            return True
-        parts = text.split()
-        if len(parts) < 2:
-            current = zombie_bot.get("bonus_squads", 0)
-            await send_message(user_id, f"👨‍👨‍👦‍👦 Бонусные сквады зомби: {current}\n\nИспользуйте: /зомби_сила +50 или /зомби_сила -20", None)
-            return True
-        try:
-            value = int(parts[1])
-            zombie_bot["bonus_squads"] = zombie_bot.get("bonus_squads", 0) + value
-            zombie_bot["squads"] = zombie_bot.get("squads", 0) + value
-            if zombie_bot["squads"] < 0:
-                zombie_bot["squads"] = 0
-            if zombie_bot["bonus_squads"] < 0:
-                zombie_bot["bonus_squads"] = 0
-            save_data()
-            await send_message(user_id, f"✅ Сквады зомби изменены на {value}.\nТекущие сквады: {zombie_bot['squads']}\nБонус: {zombie_bot['bonus_squads']}", None)
-        except:
-            await send_message(user_id, "❌ Укажите число. Пример: /зомби_сила +50", None)
-        return True
-    if text.startswith("/рыцарь") and is_admin(user_id):
-        parts = text_original.split()
-        if len(parts) >= 2:
-            target_nick = " ".join(parts[1:])
-            target_uid = find_player_by_mention_or_nickname(target_nick)
-            if not target_uid:
-                await send_message(user_id, "❌ Игрок не найден.", None)
-                return True
-        elif reply_user_id and reply_user_id in players:
-            target_uid = reply_user_id
-        else:
-            target_uid = user_id
-        p = players[target_uid]
-        p["weapon"] = "Гром С14"
-        p["weapon_durability"] = 4
-        p["weapon_max_durability"] = 4
-        p["weapon_damage"] = 4.5
-        p["weapon_accuracy"] = 3
-        p["armor"] = "Экзоскелет «Долга»"
-        p["armor_durability"] = 7
-        p["armor_max_durability"] = 7
-        p["bullet_resist"] = 4
-        p["blast_resist"] = 5
-        p["anomaly_resist"] = 1
-        p["detector"] = "Сварог"
-        p["detector_charge"] = 24
-        p["detector_max_charge"] = 24
-        p["squads"] = p.get("squads", 0) + 500
-        p["health"] = 10
-        p["radiation"] = 0
-        p["hunger"] = 0
-        p["stamina"] = 10
-        save_data()
-        target_name = players[target_uid]["nickname"]
-        await send_message(user_id, f"⚔️ {target_name} экипирован как Рыцарь Долга!\n\n🔫 Гром С14\n🦺 Экзоскелет «Долга»\n📟 Сварог\n👨‍👨‍👦‍👦 +500 сквадов\n❤️ Полное восстановление", None)
-        if target_uid != user_id:
-            await send_message(target_uid, "⚔️ Вы экипированы как Рыцарь Долга!\n\n🔫 Гром С14\n🦺 Экзоскелет «Долга»\n📟 Сварог\n👨‍👨‍👦‍👦 +500 сквадов", None)
-        return True
-    return False
-async def generate_inventory_image(user_id):
+def generate_inventory_image(user_id):
     p = players[user_id]
     backpack = p.get("backpack", {})
     CELL_SIZE = 50
@@ -4476,18 +3288,18 @@ def generate_quote_image(quote_text, user_name, avatar_image, date_str, backgrou
         font_quote = ImageFont.truetype("Graffiti1C.ttf", 28)
         font_name = ImageFont.truetype("Graffiti1C.ttf", 24)
         font_date = ImageFont.truetype("Graffiti1C.ttf", 18)
-        font_title = ImageFont.truetype("Graffiti1C.ttf", 22)
+        font_title_f = ImageFont.truetype("Graffiti1C.ttf", 22)
     except:
         try:
             font_quote = ImageFont.truetype("arial.ttf", 28)
             font_name = ImageFont.truetype("arial.ttf", 24)
             font_date = ImageFont.truetype("arial.ttf", 18)
-            font_title = ImageFont.truetype("arial.ttf", 22)
+            font_title_f = ImageFont.truetype("arial.ttf", 22)
         except:
             font_quote = ImageFont.load_default()
             font_name = font_quote
             font_date = font_quote
-            font_title = font_quote
+            font_title_f = font_quote
     temp_img = Image.new("RGB", (1, 1))
     temp_draw = ImageDraw.Draw(temp_img)
     max_text_width = width - padding * 3 - avatar_size - 20
@@ -4522,12 +3334,12 @@ def generate_quote_image(quote_text, user_name, avatar_image, date_str, backgrou
     draw = ImageDraw.Draw(img)
     top_offset = 0
     if title:
-        title_bbox = temp_draw.textbbox((0, 0), title, font=font_title)
+        title_bbox = temp_draw.textbbox((0, 0), title, font=font_title_f)
         title_x = (width - (title_bbox[2] - title_bbox[0])) // 2
         title_y = padding // 2
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            draw.text((title_x + dx, title_y + dy), title, fill=(0, 0, 0), font=font_title)
-        draw.text((title_x, title_y), title, fill=(255, 215, 0), font=font_title)
+            draw.text((title_x + dx, title_y + dy), title, fill=(0, 0, 0), font=font_title_f)
+        draw.text((title_x, title_y), title, fill=(255, 215, 0), font=font_title_f)
         top_offset = title_height
     if avatar_image:
         try:
@@ -4582,73 +3394,6 @@ def generate_quote_image(quote_text, user_name, avatar_image, date_str, backgrou
     img.save(buffer, format="PNG")
     buffer.seek(0)
     return buffer
-async def process_quote_request(user_id):
-    if not quote_text or quote_user_id <= 0:
-        await send_message(user_id, "❌ Сообщение пустое или от сообщества.", None, vk_session, peer_id)
-        return False
-    moscow_time = quote_timestamp + 3 * 3600
-    quote_date = time.strftime('%d.%m.%Y %H:%M', time.gmtime(moscow_time))
-    if user_id not in players:
-        players[user_id] = {"state": STATE_WAITING_QUOTE_PHOTO, "pending_quote": {"text": quote_text, "user_id": quote_user_id, "date": quote_date}}
-    else:
-        players[user_id]["state"] = STATE_WAITING_QUOTE_PHOTO
-        players[user_id]["pending_quote"] = {"text": quote_text, "user_id": quote_user_id, "date": quote_date}
-    save_data()
-        await send_message(user_id, "📷 Отправьте фото для фона или напишите «нет» для чёрного фона.\n💡 Заголовок: «нет Цитаты великих» или фото с подписью.", None, vk_session, peer_id)
-    return True
-async def process_quote_photo(user_id):
-    p = players.get(user_id)
-    if not p:
-        return False
-    quote_data = p.get("pending_quote")
-    if not quote_data:
-        return False
-    background_img = None
-    title = None
-    if photo_attachment:
-        sizes = photo_attachment.get('sizes', [])
-        if sizes:
-            best_size = max(sizes, key=lambda x: x.get('width', 0) * x.get('height', 0))
-            photo_url = best_size.get('url')
-            if photo_url:
-                try:
-                    resp = vk_session.http.get(photo_url)
-                    background_img = Image.open(io.BytesIO(resp.content))
-                except:
-                    pass
-        if text:
-            title = text
-    elif text.lower() == "нет":
-        background_img = None
-        title = None
-    elif text.lower().startswith("нет "):
-        background_img = None
-        title = text[4:].strip()
-    else:
-        return False
-    quote_text = quote_data.get("text", "")
-    quote_user_id = quote_data.get("user_id")
-    quote_date = quote_data.get("date", "")
-    try:
-        user_info = vk_session.method("users.get", {"user_ids": quote_user_id, "fields": "first_name"})[0]
-        user_name = user_info.get("first_name", "Аноним")
-    except:
-        user_name = "Аноним"
-    avatar_img = get_user_avatar(quote_user_id)
-    img_buffer = generate_quote_image(quote_text, user_name, avatar_img, quote_date, background_img, title)
-    try:
-        upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-        resp = vk_session.http.post(upload_url, files={"photo": ("quote.png", img_buffer, "image/png")})
-        result = resp.json()
-        photo_data = vk_session.method("photos.saveMessagesPhoto", {"photo": result["photo"], "server": result["server"], "hash": result["hash"]})[0]
-        await api.messages.send( {peer_id=peer_id, "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}", random_id=random.randint(1, 2**31), "message": "🖼 Ваша цитата готова!"})
-    except Exception as e:
-        logger.error(f"Ошибка отправки цитаты: {e}")
-        await send_message(user_id, "❌ Ошибка генерации цитаты.", None, vk_session, peer_id)
-    p["state"] = STATE_IN_MENU
-    p.pop("pending_quote", None)
-    save_data()
-    return True
 def generate_artifacts_info_image():
     categories = [
         ("Восстановление здоровья ❤️", ["Кровь камня", "Ломоть мяса", "Душа", "Светляк"], ["+0.25", "+0.5", "+0.75", "+1"]),
@@ -4705,66 +3450,24 @@ def generate_artifacts_info_image():
     img.save(buffer, format="PNG")
     buffer.seek(0)
     return buffer
-async def send_artifacts_info_with_image(user_id):
+async def send_artifacts_info_with_image(user_id, keyboard):
     try:
         img_buffer = generate_artifacts_info_image()
-        upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-        response = vk_session.http.post(upload_url, files={"photo": ("artifacts.png", img_buffer, "image/png")})
-        result = response.json()
-        photo_data = vk_session.method("photos.saveMessagesPhoto", {
-            "photo": result["photo"],
-            "server": result["server"],
-            "hash": result["hash"]
-        })[0]
-        await api.messages.send( {
-            user_id=user_id,
-            "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}",
-            random_id=random.randint(1, 2**31),
-            "message": ARTIFACT_INFO_TEXT,
-            keyboard=keyboard.get_keyboard()
-        })
+        await send_photo_message(user_id, img_buffer, ARTIFACT_INFO_TEXT, keyboard)
     except Exception as e:
         logger.error(f"Ошибка отправки изображения артефактов: {e}")
         await send_message(user_id, ARTIFACT_INFO_TEXT, keyboard)
 async def upload_and_send_inventory(user_id):
     try:
         img_buffer = generate_inventory_image(user_id)
-        upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-        response = vk_session.http.post(upload_url, files={"photo": ("inventory.png", img_buffer, "image/png")})
-        result = response.json()
-        photo_data = vk_session.method("photos.saveMessagesPhoto", {
-            "photo": result["photo"],
-            "server": result["server"],
-            "hash": result["hash"]
-        })[0]
-        await api.messages.send( {
-            user_id=user_id,
-            "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}",
-            random_id=random.randint(1, 2**31),
-            "message": "🎒 Ваш рюкзак:",
-            "keyboard": create_backpack_menu_keyboard().get_keyboard()
-        })
+        await send_photo_message(user_id, img_buffer, "🎒 Ваш рюкзак:", create_backpack_menu_keyboard())
     except Exception as e:
         logger.error(f"Ошибка отправки инвентаря: {e}")
         await send_message(user_id, format_backpack_info(user_id), create_backpack_menu_keyboard())
 async def upload_and_send_warehouse_global(user_id):
     try:
         img_buffer = generate_warehouse_image()
-        upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-        response = vk_session.http.post(upload_url, files={"photo": ("warehouse.png", img_buffer, "image/png")})
-        result = response.json()
-        photo_data = vk_session.method("photos.saveMessagesPhoto", {
-            "photo": result["photo"],
-            "server": result["server"],
-            "hash": result["hash"]
-        })[0]
-        await api.messages.send( {
-            user_id=user_id,
-            "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}",
-            random_id=random.randint(1, 2**31),
-            "message": "🧰 Общий склад:\nИспользуйте: положить/забрать (предмет) (кол-во)",
-            "keyboard": create_warehouse_keyboard().get_keyboard()
-        })
+        await send_photo_message(user_id, img_buffer, "🧰 Общий склад:\nИспользуйте: положить/забрать (предмет) (кол-во)", create_warehouse_keyboard())
     except Exception as e:
         logger.error(f"Ошибка отправки склада: {e}")
         await send_message(user_id, format_warehouse_info(), create_warehouse_keyboard())
@@ -4772,8 +3475,7 @@ async def show_buy_provisions_menu(user_id):
     img_width = 500
     line_height = 60
     padding = 10
-    all_provisions = (CATEGORIES["еда"] + CATEGORIES["медикаменты"] +
-                      CATEGORIES["антирад"] + CATEGORIES["энергетики"] + CATEGORIES["прочее"])
+    all_provisions = (CATEGORIES["еда"] + CATEGORIES["медикаменты"] + CATEGORIES["антирад"] + CATEGORIES["энергетики"] + CATEGORIES["прочее"])
     lines = []
     icons = []
     prices = []
@@ -4799,7 +3501,7 @@ async def show_buy_provisions_menu(user_id):
         try:
             icon = Image.open(icon_path).convert("RGBA").resize((40, 40))
             img.paste(icon, (padding, y), icon)
-        except Exception as e:
+        except:
             draw.rectangle([padding, y, padding + 40, y + 40], outline="gray", width=2)
         draw.text((padding + 50, y + 10), line, fill="white", font=font)
         draw.text((img_width - 60, y + 10), prices[i], fill="yellow", font=font)
@@ -4808,22 +3510,8 @@ async def show_buy_provisions_menu(user_id):
     img.save(buffer, format="PNG")
     buffer.seek(0)
     try:
-        upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-        response = vk_session.http.post(upload_url, files={"photo": ("menu.png", buffer, "image/png")})
-        result = response.json()
-        photo_data = vk_session.method("photos.saveMessagesPhoto", {
-            "photo": result["photo"],
-            "server": result["server"],
-            "hash": result["hash"]
-        })[0]
         money = players[user_id].get("money", 0)
-        await api.messages.send( {
-            user_id=user_id,
-            "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}",
-            random_id=random.randint(1, 2**31),
-            "message": f"💲 Ваши деньги: {money}р\n\nВыберите предмет и количество для покупки (например: хлеб 2):",
-            "keyboard": create_back_only_keyboard().get_keyboard()
-        })
+        await send_photo_message(user_id, buffer, f"💲 Ваши деньги: {money}р\n\nВыберите предмет и количество для покупки (например: хлеб 2):", create_back_only_keyboard())
     except Exception as e:
         logger.error(f"Ошибка отправки меню провизии: {e}")
         await send_message(user_id, "❌ Ошибка загрузки меню. Попробуйте снова.", create_back_only_keyboard())
@@ -4832,8 +3520,7 @@ async def show_buy_provisions_menu(user_id):
 async def show_sell_provisions_menu(user_id):
     p = players[user_id]
     backpack = p.get("backpack", {})
-    all_provisions = (CATEGORIES["еда"] + CATEGORIES["медикаменты"] +
-                      CATEGORIES["антирад"] + CATEGORIES["энергетики"] + CATEGORIES["прочее"])
+    all_provisions = (CATEGORIES["еда"] + CATEGORIES["медикаменты"] + CATEGORIES["антирад"] + CATEGORIES["энергетики"] + CATEGORIES["прочее"])
     msg_lines = [f"💲 Ваши деньги: {p.get('money', 0)}р\n", "📦 Ваша провизия:"]
     has_items = False
     for item in all_provisions:
@@ -4847,7 +3534,7 @@ async def show_sell_provisions_menu(user_id):
     msg_lines.append("\nВведите предмет и количество (например: хлеб 2):")
     players[user_id]["state"] = STATE_TRADER_SELL
     save_data()
-        await send_message(user_id, "\n".join(msg_lines), create_back_only_keyboard())
+    await send_message(user_id, "\n".join(msg_lines), create_back_only_keyboard())
 async def show_sell_artifacts_menu(user_id):
     p = players[user_id]
     backpack = p.get("backpack", {})
@@ -4865,11 +3552,10 @@ async def show_sell_artifacts_menu(user_id):
     msg_lines.append("")
     msg_lines.append("Напишите: [название] [количество]")
     msg_lines.append("Пример: Медуза 2")
-
     players[user_id]["state"] = STATE_TRADER_SELL_ARTIFACTS
     save_data()
-        await send_message(user_id, "\n".join(msg_lines), create_back_only_keyboard())
-async def handle_trader_buy(user_id):
+    await send_message(user_id, "\n".join(msg_lines), create_back_only_keyboard())
+async def handle_trader_buy(user_id, text):
     parts = text.strip().lower().split()
     if len(parts) < 2:
         await send_message(user_id, "❌ Укажите предмет и количество.", create_back_only_keyboard())
@@ -4890,8 +3576,8 @@ async def handle_trader_buy(user_id):
     players[user_id]["money"] -= price
     players[user_id]["backpack"][item_name] = players[user_id]["backpack"].get(item_name, 0) + count
     save_data()
-        await send_message(user_id, f"✅ Куплено: {item_name} x{count} за {price}р.", create_trader_category_keyboard())
-async def handle_trader_sell(user_id):
+    await send_message(user_id, f"✅ Куплено: {item_name} x{count} за {price}р.", create_trader_category_keyboard())
+async def handle_trader_sell(user_id, text):
     parts = text.strip().lower().split()
     if len(parts) < 2:
         await send_message(user_id, "❌ Укажите предмет и количество.", create_back_only_keyboard())
@@ -4919,8 +3605,7 @@ async def handle_trader_sell(user_id):
     save_data()
     p = players[user_id]
     backpack = p.get("backpack", {})
-    all_provisions = (CATEGORIES["еда"] + CATEGORIES["медикаменты"] +
-                      CATEGORIES["антирад"] + CATEGORIES["энергетики"] + CATEGORIES["прочее"])
+    all_provisions = (CATEGORIES["еда"] + CATEGORIES["медикаменты"] + CATEGORIES["антирад"] + CATEGORIES["энергетики"] + CATEGORIES["прочее"])
     msg_lines = [f"✅ Продано: {item_name} x{count} за {price}р.\n", f"💲 Ваши деньги: {p.get('money', 0)}р\n", "📦 Ваша провизия:"]
     has_items = False
     for item in all_provisions:
@@ -4932,8 +3617,8 @@ async def handle_trader_sell(user_id):
     if not has_items:
         msg_lines.append("Пусто")
     msg_lines.append("\nВведите предмет и количество (например: хлеб 2):")
-        await send_message(user_id, "\n".join(msg_lines), create_back_only_keyboard())
-async def handle_trader_sell_artifact(user_id):
+    await send_message(user_id, "\n".join(msg_lines), create_back_only_keyboard())
+async def handle_trader_sell_artifact(user_id, text):
     parts = text.strip().split()
     if len(parts) < 2:
         await send_message(user_id, "❌ Укажите название артефакта и количество.", create_back_only_keyboard())
@@ -4961,8 +3646,8 @@ async def handle_trader_sell_artifact(user_id):
     if players[user_id]["backpack"][found_art] <= 0:
         del players[user_id]["backpack"][found_art]
     save_data()
-        await send_message(user_id, f"✅ Продано: {found_art} x{count} за {price}р.", create_trader_sell_category_keyboard())
-async def handle_equipment_sell_confirmation(user_id):
+    await send_message(user_id, f"✅ Продано: {found_art} x{count} за {price}р.", create_trader_sell_category_keyboard())
+async def handle_equipment_sell_confirmation(user_id, text):
     p = players[user_id]
     if text == "🔚 Назад":
         p["state"] = STATE_TRADER_SELL_CATEGORY
@@ -4971,7 +3656,7 @@ async def handle_equipment_sell_confirmation(user_id):
         return
     if text == "🔫 Оружие":
         if not p.get("weapon"):
-        await send_message(user_id, "❌ У вас нет оружия для продажи.", create_equipment_sell_keyboard())
+            await send_message(user_id, "❌ У вас нет оружия для продажи.", create_equipment_sell_keyboard())
             return
         p["pending_sell"] = "weapon"
         weapon_name = p["weapon"]
@@ -4986,7 +3671,7 @@ async def handle_equipment_sell_confirmation(user_id):
         return
     elif text == "🦺 Броня":
         if not p.get("armor"):
-        await send_message(user_id, "❌ У вас нет брони для продажи.", create_equipment_sell_keyboard())
+            await send_message(user_id, "❌ У вас нет брони для продажи.", create_equipment_sell_keyboard())
             return
         p["pending_sell"] = "armor"
         armor_name = p["armor"]
@@ -5001,7 +3686,7 @@ async def handle_equipment_sell_confirmation(user_id):
         return
     elif text == "📟 Детекторы":
         if not p.get("detector"):
-        await send_message(user_id, "❌ У вас нет детектора для продажи.", create_equipment_sell_keyboard())
+            await send_message(user_id, "❌ У вас нет детектора для продажи.", create_equipment_sell_keyboard())
             return
         p["pending_sell"] = "detector"
         det_name = p["detector"]
@@ -5013,7 +3698,7 @@ async def handle_equipment_sell_confirmation(user_id):
     else:
         await send_message(user_id, "Выберите категорию снаряжения для продажи:", create_equipment_sell_keyboard())
         save_data()
-async def handle_equipment_sell_final(user_id):
+async def handle_equipment_sell_final(user_id, text):
     p = players[user_id]
     if text == "✅ Да":
         sell_type = p.get("pending_sell")
@@ -5062,7 +3747,7 @@ async def handle_equipment_sell_final(user_id):
         p["state"] = STATE_TRADER_SELL_EQUIPMENT_CONFIRM
         save_data()
         await send_message(user_id, "Продажа отменена.", create_equipment_sell_keyboard())
-async def handle_repair(user_id):
+async def handle_repair(user_id, text):
     p = players[user_id]
     if text == "🔚 Назад":
         p["state"] = STATE_TRADER_MAIN
@@ -5071,13 +3756,13 @@ async def handle_repair(user_id):
         return
     if text == "🔫 Оружие":
         if not p.get("weapon"):
-        await send_message(user_id, "❌ У вас нет оружия для ремонта.", create_repair_keyboard(user_id))
+            await send_message(user_id, "❌ У вас нет оружия для ремонта.", create_repair_keyboard(user_id))
             return
         if p["money"] < 15:
-        await send_message(user_id, "❌ Недостаточно денег для ремонта.", create_repair_keyboard(user_id))
+            await send_message(user_id, "❌ Недостаточно денег для ремонта.", create_repair_keyboard(user_id))
             return
         if p["weapon_durability"] >= p["weapon_max_durability"]:
-        await send_message(user_id, "🔫 Оружие уже полностью отремонтировано.", create_repair_keyboard(user_id))
+            await send_message(user_id, "🔫 Оружие уже полностью отремонтировано.", create_repair_keyboard(user_id))
             return
         p["money"] -= 15
         p["weapon_durability"] = min(p["weapon_max_durability"], p["weapon_durability"] + 1)
@@ -5086,41 +3771,41 @@ async def handle_repair(user_id):
         return
     if text == "🦺 Броня":
         if not p.get("armor"):
-        await send_message(user_id, "❌ У вас нет брони для ремонта.", create_repair_keyboard(user_id))
+            await send_message(user_id, "❌ У вас нет брони для ремонта.", create_repair_keyboard(user_id))
             return
         if p["money"] < 15:
-        await send_message(user_id, "❌ Недостаточно денег для ремонта.", create_repair_keyboard(user_id))
+            await send_message(user_id, "❌ Недостаточно денег для ремонта.", create_repair_keyboard(user_id))
             return
         if p["armor_durability"] >= p["armor_max_durability"]:
-        await send_message(user_id, "🦺 Броня уже полностью отремонтирована.", create_repair_keyboard(user_id))
+            await send_message(user_id, "🦺 Броня уже полностью отремонтирована.", create_repair_keyboard(user_id))
             return
         p["money"] -= 15
         p["armor_durability"] = min(p["armor_max_durability"], p["armor_durability"] + 1)
         save_data()
         await send_message(user_id, f"✅ Броня отремонтирована. Текущая прочность: {p['armor_durability']}/{p['armor_max_durability']}", create_repair_keyboard(user_id))
         return
-async def handle_equipment_buy_confirmation(user_id):
+async def handle_equipment_buy_confirmation(user_id, text):
     p = players[user_id]
     if text == "✅ Да":
         item_name = p.get("pending_buy_item")
         item_type = p.get("pending_buy_type")
         faction = p["faction"]
         if item_type == "detector" and p.get("detector"):
-        await send_message(user_id, f"❌ У вас уже есть детектор: {p['detector']}. Сначала продайте его.", create_equipment_category_keyboard())
+            await send_message(user_id, f"❌ У вас уже есть детектор: {p['detector']}. Сначала продайте его.", create_equipment_category_keyboard())
             p["state"] = STATE_TRADER_BUY_EQUIPMENT
             p["pending_buy_item"] = None
             p["pending_buy_type"] = None
             save_data()
             return
         if item_type == "weapon" and p.get("weapon"):
-        await send_message(user_id, f"❌ У вас уже есть оружие: {p['weapon']}. Сначала продайте его.", create_equipment_category_keyboard())
+            await send_message(user_id, f"❌ У вас уже есть оружие: {p['weapon']}. Сначала продайте его.", create_equipment_category_keyboard())
             p["state"] = STATE_TRADER_BUY_EQUIPMENT
             p["pending_buy_item"] = None
             p["pending_buy_type"] = None
             save_data()
             return
         if item_type == "armor" and p.get("armor"):
-        await send_message(user_id, f"❌ У вас уже есть броня: {p['armor']}. Сначала продайте её.", create_equipment_category_keyboard())
+            await send_message(user_id, f"❌ У вас уже есть броня: {p['armor']}. Сначала продайте её.", create_equipment_category_keyboard())
             p["state"] = STATE_TRADER_BUY_EQUIPMENT
             p["pending_buy_item"] = None
             p["pending_buy_type"] = None
@@ -5157,18 +3842,18 @@ async def handle_equipment_buy_confirmation(user_id):
             p["pending_buy_type"] = None
             p["state"] = STATE_TRADER_BUY_EQUIPMENT
             save_data()
-        await send_message(user_id, f"✅ Куплено: {item_name} за {price}р.", create_equipment_category_keyboard())
+            await send_message(user_id, f"✅ Куплено: {item_name} за {price}р.", create_equipment_category_keyboard())
         else:
             p["state"] = STATE_TRADER_BUY_EQUIPMENT
             save_data()
-        await send_message(user_id, "❌ Ошибка при покупке.", create_equipment_category_keyboard())
+            await send_message(user_id, "❌ Ошибка при покупке.", create_equipment_category_keyboard())
     elif text == "❌ Нет":
         p["pending_buy_item"] = None
         p["pending_buy_type"] = None
         p["state"] = STATE_TRADER_BUY_EQUIPMENT
         save_data()
         await send_message(user_id, "Покупка отменена.", create_equipment_category_keyboard())
-async def handle_warehouse_action(user_id):
+async def handle_warehouse_action(user_id, text):
     global shared_warehouse, shared_warehouse_money, faction_warehouses, faction_warehouse_money
     if LAST_STAND_MODE:
         faction = players[user_id].get("faction")
@@ -5189,11 +3874,11 @@ async def handle_warehouse_action(user_id):
         try:
             amount = int(parts[2])
         except:
-        await send_message(user_id, "❌ Укажите сумму.", create_warehouse_keyboard())
+            await send_message(user_id, "❌ Укажите сумму.", create_warehouse_keyboard())
             return
         if action == "положить":
             if players[user_id]["money"] < amount:
-        await send_message(user_id, "❌ Недостаточно денег.", create_warehouse_keyboard())
+                await send_message(user_id, "❌ Недостаточно денег.", create_warehouse_keyboard())
                 return
             players[user_id]["money"] -= amount
             if LAST_STAND_MODE:
@@ -5203,7 +3888,7 @@ async def handle_warehouse_action(user_id):
         else:
             current_money = faction_warehouse_money.get(faction, 0) if LAST_STAND_MODE else shared_warehouse_money
             if current_money < amount:
-        await send_message(user_id, "❌ Недостаточно денег на складе.", create_warehouse_keyboard())
+                await send_message(user_id, "❌ Недостаточно денег на складе.", create_warehouse_keyboard())
                 return
             if LAST_STAND_MODE:
                 faction_warehouse_money[faction] -= amount
@@ -5215,14 +3900,14 @@ async def handle_warehouse_action(user_id):
         try:
             count = int(parts[-1])
         except:
-        await send_message(user_id, "❌ Укажите количество.", create_warehouse_keyboard())
+            await send_message(user_id, "❌ Укажите количество.", create_warehouse_keyboard())
             return
         if item_name not in ITEM_EFFECTS and item_name not in [a.lower() for a in ALL_ARTIFACTS]:
-        await send_message(user_id, "❌ Неизвестный предмет.", create_warehouse_keyboard())
+            await send_message(user_id, "❌ Неизвестный предмет.", create_warehouse_keyboard())
             return
         if action == "положить":
             if players[user_id]["backpack"].get(item_name, 0) < count:
-        await send_message(user_id, f"❌ У вас нет {count} шт. этого предмета.", create_warehouse_keyboard())
+                await send_message(user_id, f"❌ У вас нет {count} шт. этого предмета.", create_warehouse_keyboard())
                 return
             players[user_id]["backpack"][item_name] -= count
             warehouse[item_name] = warehouse.get(item_name, 0) + count
@@ -5230,7 +3915,7 @@ async def handle_warehouse_action(user_id):
                 del players[user_id]["backpack"][item_name]
         else:
             if warehouse.get(item_name, 0) < count:
-        await send_message(user_id, f"❌ На складе нет {count} шт. этого предмета.", create_warehouse_keyboard())
+                await send_message(user_id, f"❌ На складе нет {count} шт. этого предмета.", create_warehouse_keyboard())
                 return
             warehouse[item_name] -= count
             players[user_id]["backpack"][item_name] = players[user_id]["backpack"].get(item_name, 0) + count
@@ -5241,8 +3926,8 @@ async def handle_warehouse_action(user_id):
         else:
             shared_warehouse = warehouse
     save_data()
-    upload_and_send_warehouse_global(user_id)
-async def handle_photo_upload(user_id):
+    await upload_and_send_warehouse_global(user_id)
+async def handle_photo_upload(user_id, photo_url):
     if user_id != 353430025:
         return
     target_uid = players[user_id].get("pending_photo_target")
@@ -5250,1624 +3935,243 @@ async def handle_photo_upload(user_id):
         return
     players[user_id].pop("pending_photo_target", None)
     try:
-        img_data = vk_session.http.get(photo_url).content
+        async with aiohttp.ClientSession() as session:
+            async with session.get(photo_url) as resp:
+                img_data = await resp.read()
         img = Image.open(io.BytesIO(img_data)).convert("RGBA")
         img.save(os.path.join(AVATAR_DIR, f"{target_uid}.png"))
-        await send_message(user_id, f"✅ Фото установлено игроку {players[target_uid]['nickname']}.", None)
-        await send_message(target_uid, "🖼️ Администратор установил вам новую аватарку!", None)
+        await send_message(user_id, f"✅ Фото установлено игроку {players[target_uid]['nickname']}.")
+        await send_message(target_uid, "🖼️ Администратор установил вам новую аватарку!")
     except Exception as e:
         logger.error(f"Ошибка загрузки фото: {e}")
-        await send_message(user_id, "❌ Не удалось сохранить фото.", None)
-def check_pending_states(vk_session):
-    global emission_counter
-    current_time = time.time()
-    updated_any = False
-    if emission_counter >= EMISSION_WARNING:
-        emission_counter += 2
-        if emission_counter >= EMISSION_MAX:
-            trigger_emission(vk_session)
-        else:
-            save_data()
-    for user_id, data in list(players.items()):
-        faction = data.get("faction")
-        if not faction or faction == "None" or faction is None:
-            continue
-        if data.get("donation_end_time") and current_time >= data.get("donation_end_time"):
-            remove_donation(user_id)
-        if data.get("health", 10) <= 0:
-            if not data.get("death_notified", False):
-                lose_random_items_on_death(user_id)
-                continue
-        if data.get("state") == STATE_TRANSITION_WAIT:
-            end_time = data.get("transition_end_time")
-            if end_time and current_time >= end_time:
-                data["previous_location"] = None
-                data["previous_point"] = None
-                if random.randint(1, 100) <= 30:
-                    money_found = random.randint(5, 15)
-                    data["money"] = data.get("money", 0) + money_found
-                    transition_msg = f"✅ Переход завершён!\n💲 По пути нашли: {money_found}р"
-                elif random.randint(1, 100) <= 20:
-                    rad_gain = round(random.uniform(0.5, 1.5), 1)
-                    data["radiation"] = min(10, data["radiation"] + rad_gain)
-                    transition_msg = f"✅ Переход завершён!\n☢️ Получено облучение: +{rad_gain}"
-                else:
-                    transition_msg = "✅ Переход завершён!"
-                data["transition_end_time"] = None
-                data["state"] = STATE_IN_MENU
-                data["backpack"]["батарейки"] = data["backpack"].get("батарейки", 0) - 2
-                if data["backpack"]["батарейки"] <= 0:
-                    del data["backpack"]["батарейки"]
-                transition_msg += "\n🔋 Потрачено 2 батарейки."
-                current_location = data["location"]
-                current_point = data["point"]
-                if (current_location, current_point) in TRANSITION_ROUTES:
-                    destinations = TRANSITION_ROUTES[(current_location, current_point)]
-                    transition_msg += "\n\n📍 Вы на точке перехода!"
-                    for dest_loc, dest_point in destinations:
-                        transition_msg += f"\nТеперь вы можете попасть на {dest_loc} {dest_point}"
-                send_location_image(user_id, current_location, current_point, transition_msg, create_main_menu_keyboard(user_id))
-                updated_any = True
-        elif data.get("state") == STATE_RESTING:
-            start_time = data.get("rest_start_time")
-            if start_time:
-                elapsed_minutes = int((current_time - start_time) // 360)
-                initial = data.get("initial_stamina", data["stamina"])
-                belt_bonus = apply_belt_effects_on_rest(user_id)
-                donation_bonus = 1 if has_active_donation(user_id) else 0
-                new_stamina = min(10, initial + elapsed_minutes * (1 + belt_bonus + donation_bonus))
-                if new_stamina > data["stamina"]:
-                    data["stamina"] = new_stamina
-                    updated_any = True
-                if data["stamina"] >= 10:
-                    data["stamina"] = 10
-                    data["state"] = STATE_IN_CAMP
-                    data["rest_start_time"] = None
-                    data.pop("initial_stamina", None)
-        await send_message(user_id, "😴 Вы отдохнули и полностью восстановили выносливость.", create_camp_menu_keyboard())
-                    updated_any = True
-    if updated_any:
-        save_data()
-async def handle_message(event: SimpleBotEvent):
- if not hasattr(event, 'text'):
-  return
- if not hasattr(event, 'user_id') or event.from_chat:
-  return
- user_id = event.user_id
- text = event.text.strip() if hasattr(event, 'text') else ""
- if user_id in banned_users:
-  reason = banned_users.get(user_id, "Причина не указана")
-  await send_message(user_id, f"🚫 Вы заблокированы в игре.\n📝 Причина: {reason}", None)
-  return
- if user_id in players and players[user_id].get("state") == STATE_WAITING_QUOTE_PHOTO:
-  return
- if user_id in players:
-  state = players[user_id].get("state")
-  registration_states = [STATE_WAITING_FOR_START, STATE_READING_INSTRUCTIONS, STATE_CHOOSING_FACTION, STATE_ENTERING_NICKNAME]
-  if state not in registration_states:
-   if handle_global_commands(user_id, text):
-    return
- if text.lower() == "/skip_cd" and is_admin(user_id):
-  if user_id in players and players[user_id].get("state") == STATE_TRANSITION_WAIT:
-   players[user_id]["state"] = STATE_IN_MENU
-   players[user_id]["transition_end_time"] = None
-   save_data()
-   await send_message(user_id, "⏱️ Таймер перехода сброшен.", None)
-  else:
-   await send_message(user_id, "Вы не в состоянии перехода.", None)
-  return
- if text.lower() == "/reset_all":
-  if user_id == 353430025:
-   reset_all_data()
-   await send_message(user_id, "🔄 Все данные сброшены.", None)
-  else:
-   await send_message(user_id, "❌ Эта команда доступна только администратору.", None)
-  return
- if user_id in players and players[user_id].get("state") == STATE_TRANSITION_WAIT:
-  end_time = players[user_id]["transition_end_time"]
-  if end_time and time.time() < end_time:
-   remaining = end_time - time.time()
-   minutes = int(remaining // 60)
-   seconds = int(remaining % 60)
-   await send_message(user_id, f"⏳ Ожидание перехода: {minutes} мин {seconds} сек", None)
-  return
- time.sleep(0.3)
- if user_id not in players:
-  name, screen_name = get_user_info(user_id)
-  players[user_id] = {
-   "state": STATE_WAITING_FOR_START,
-   "name": name,
-   "screen_name": screen_name,
-   "faction": None,
-   "nickname": None,
-   "location": "Лагерь",
-   "point": "Б1",
-   "health": 10,
-   "radiation": 0,
-   "hunger": 0,
-   "stamina": 10,
-   "detector": None,
-   "detector_charge": 0,
-   "detector_max_charge": 0,
-   "armor": None,
-   "armor_durability": 0,
-   "armor_max_durability": 0,
-   "bullet_resist": 0,
-   "blast_resist": 0,
-   "anomaly_resist": 0,
-   "weapon": None,
-   "weapon_durability": 0,
-   "weapon_max_durability": 0,
-   "weapon_damage": 0,
-   "weapon_accuracy": 0,
-   "money": 0,
-   "backpack": {"батарейки": 4},
-   "transition_end_time": None,
-   "rest_start_time": None,
-   "backpack_sort": 0,
-   "death_notified": False,
-   "belt": [None, None, None],
-   "anomaly_map": None,
-   "player_pos": None,
-   "artifact_positions": [],
-   "anomaly_positions": [],
-   "current_anomaly_type": None,
-   "squads": 0,
-   "food_units": 0,
-   "med_units": 0,
-   "rad_units": 0,
-   "donation_end_time": None,
-   "hidden_anomaly_positions": [],
-   "previous_location": None,
-   "previous_point": None,
-   "donation_artifact": None
-  }
-  save_data()
-        await send_message(user_id, f"Привет, {name}! 👋\nНажми кнопку «Старт», чтобы начать игру.", create_start_keyboard())
-  return
- _, current_screen = get_user_info(user_id)
- if players[user_id].get("screen_name") != current_screen:
-  players[user_id]["screen_name"] = current_screen
-  save_data()
- state = players[user_id]["state"]
- if state == STATE_ANOMALY_EXPLORE:
-  p = players[user_id]
-  if p.get("anomaly_path_choosing") == True:
-   if text == "🚪 Уйти":
-    p["state"] = STATE_IN_MENU
-    p["anomaly_path_choosing"] = False
-    p["anomaly_safe_path"] = None
-    save_data()
-        await send_message(user_id, "Вы отступили от аномальной зоны.", create_main_menu_keyboard(user_id))
-    return
-   chosen_path = 0
-   if text == "🌀 Путь 1":
-    chosen_path = 1
-   elif text == "🌀 Путь 2":
-    chosen_path = 2
-   elif text == "🌀 Путь 3":
-    chosen_path = 3
-   if chosen_path == 0:
-        await send_message(user_id, "⚠️ Выберите один из путей или уйдите.", create_anomaly_path_keyboard())
-    return
-   safe_path = p.get("anomaly_safe_path", 1)
-   messages = []
-   if chosen_path != safe_path:
-    atype = p.get("current_anomaly_type", "грави")
-    min_dmg, max_dmg = ANOMALY_DAMAGE[atype]
-    raw_damage = round(random.uniform(min_dmg, max_dmg), 1)
-    anomaly_resist = get_total_anomaly_resist(user_id)
-    actual_damage = max(0, round(raw_damage - anomaly_resist, 1))
-    p["health"] = max(0, p["health"] - actual_damage)
-    if actual_damage > 0:
-     messages.append(f"💥 Опасный путь! Вы попали в аномалию!")
-     messages.append(f"❤️ Получено {actual_damage} урона (защита: {anomaly_resist})")
-     messages.append(f"❤️ Здоровье: {p['health']}/10")
-    else:
-     messages.append("🛡️ Вы попали в аномалию, но защита полностью поглотила урон!")
-    if random.randint(1, 100) <= 25 and p.get("armor"):
-     p["armor_durability"] = max(0, p["armor_durability"] - 1)
-     messages.append("🔧 Броня повреждена (-1)!")
-    save_data()
-    if p["health"] <= 0:
-     messages.append("\n💀 Вы погибли в аномалии!")
-     lost_items, money_lost = calculate_and_apply_death_losses(user_id, max_items=5, max_money=50)
-     messages.extend(format_death_losses(lost_items, money_lost))
-     p["state"] = STATE_IN_MENU
-     p["death_notified"] = True
-     p["anomaly_path_choosing"] = False
-     p["anomaly_safe_path"] = None
-     save_data()
-        await send_message(user_id, "\n".join(messages), create_main_menu_keyboard(user_id))
-     return
-    messages.append("")
-   else:
-    messages.append("✅ Вы выбрали безопасный путь!")
-    messages.append("")
-   start_anomaly_map(user_id)
-   p["state"] = STATE_ANOMALY_EXPLORE
-   save_data()
-   atype = p.get("current_anomaly_type", "грави")
-   messages.append(f"🌀 Вы вошли в аномальную зону ({atype})")
-   messages.append("Используйте кнопки для передвижения.")
-   messages.append("Найдите артефакты и избегайте аномалий!")
-   alerts = get_detector_alerts(user_id)
-   if alerts:
-    messages.append(alerts)
-   try:
-    img_buffer = generate_anomaly_map_image(user_id)
-    upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-    response = vk_session.http.post(upload_url, files={"photo": ("map.png", img_buffer, "image/png")})
-    result = response.json()
-    photo_data = vk_session.method("photos.saveMessagesPhoto", {"photo": result["photo"], "server": result["server"], "hash": result["hash"]})[0]
-    await api.messages.send( {user_id=user_id, "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}", random_id=random.randint(1, 2**31), "message": "\n".join(messages), "keyboard": create_anomaly_movement_keyboard().get_keyboard()})
-   except Exception as e:
-    logger.error(f"Ошибка генерации карты: {e}")
-        await send_message(user_id, "\n".join(messages), create_anomaly_movement_keyboard())
-   return
-  if text == "🚪 Уйти":
-   p["state"] = STATE_IN_MENU
-   p["artifact_positions"] = []
-   p["anomaly_positions"] = []
-   p["anomaly_path_choosing"] = False
-   save_data()
-        await send_message(user_id, "Вы покинули аномальную зону.", create_main_menu_keyboard(user_id))
-   return
-  elif text in ["⬆️", "⬇️", "⬅️", "➡️"]:
-   handle_anomaly_move(user_id, text)
-   return
-  else:
-        await send_message(user_id, "Используйте кнопки для передвижения.", create_anomaly_movement_keyboard())
-   return
- if state == STATE_BELT_MAIN:
-  if text == "➕ Повесить":
-   players[user_id]["state"] = STATE_BELT_SELECT_SLOT
-   players[user_id]["belt_action"] = "equip"
-   save_data()
-        await send_message(user_id, "Выберите пояс:", create_belt_slot_keyboard())
-   return
-  elif text == "➖ Снять":
-   players[user_id]["state"] = STATE_BELT_SELECT_SLOT
-   players[user_id]["belt_action"] = "unequip"
-   save_data()
-        await send_message(user_id, "Выберите пояс для снятия:", create_belt_slot_keyboard())
-   return
-  elif text == "💡 Инфо об артефактах":
-   send_artifacts_info_with_image(user_id, create_belt_main_keyboard())
-   return
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_IN_CAMP
-   save_data()
-        await send_message(user_id, format_camp_info(user_id), create_camp_menu_keyboard())
-   return
-  elif text.lower().startswith("повесить "):
-   art_name = text[9:].strip()
-   for art in ALL_ARTIFACTS:
-    if art.lower() == art_name.lower():
-     if players[user_id]["backpack"].get(art, 0) > 0:
-      belt = players[user_id].get("belt", [None, None, None])
-      for i in range(3):
-       if belt[i] is None:
-        belt[i] = art
-        players[user_id]["belt"] = belt
-        players[user_id]["backpack"][art] -= 1
-        if players[user_id]["backpack"][art] <= 0:
-         del players[user_id]["backpack"][art]
-        save_data()
-        await send_message(user_id, f"✅ {art} повешен на пояс {i+1}.", create_belt_main_keyboard())
-        return
-        await send_message(user_id, "❌ Все пояса заняты.", create_belt_main_keyboard())
-      return
-     else:
-        await send_message(user_id, "❌ У вас нет этого артефакта.", create_belt_main_keyboard())
-      return
-        await send_message(user_id, "❌ Неизвестный артефакт.", create_belt_main_keyboard())
-   return
-  elif text.lower().startswith("снять "):
-   art_name = text[6:].strip()
-   belt = players[user_id].get("belt", [None, None, None])
-   for i in range(3):
-    if belt[i] and belt[i].lower() == art_name.lower():
-     art = belt[i]
-     belt[i] = None
-     players[user_id]["belt"] = belt
-     players[user_id]["backpack"][art] = players[user_id]["backpack"].get(art, 0) + 1
-     save_data()
-        await send_message(user_id, f"✅ {art} снят с пояса {i+1}.", create_belt_main_keyboard())
-     return
-        await send_message(user_id, "❌ Этот артефакт не на поясе.", create_belt_main_keyboard())
-   return
- if state == STATE_BELT_SELECT_SLOT:
-  slot = -1
-  if text == "1️⃣ Пояс":
-   slot = 0
-  elif text == "2️⃣ Пояс":
-   slot = 1
-  elif text == "3️⃣ Пояс":
-   slot = 2
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_BELT_MAIN
-   save_data()
-   belt = players[user_id].get("belt", [None, None, None])
-   belt_info = (f"🟡 Пояс:\n1️⃣ {belt[0] or 'пусто'}\n2️⃣ {belt[1] or 'пусто'}\n3️⃣ {belt[2] or 'пусто'}\n💡 Быстрые команды:\n«Повесить [артефакт]»\n«Снять [артефакт]»")
-        await send_message(user_id, belt_info, create_belt_main_keyboard())
-   return
-  if slot >= 0:
-   action = players[user_id].get("belt_action", "equip")
-   belt = players[user_id].get("belt", [None, None, None])
-   if action == "equip":
-    if belt[slot] is not None:
-        await send_message(user_id, f"❌ Пояс {slot+1} уже занят ({belt[slot]}).", create_belt_slot_keyboard())
-     return
-    available_arts = [art for art in ALL_ARTIFACTS if players[user_id]["backpack"].get(art, 0) > 0]
-    if not available_arts:
-        await send_message(user_id, "❌ У вас нет артефактов в инвентаре.", create_belt_slot_keyboard())
-     return
-    players[user_id]["pending_belt_slot"] = slot
-    players[user_id]["state"] = STATE_BELT_SELECT_ARTIFACT
-    players[user_id]["artifact_page"] = 0
-    save_data()
-        await send_message(user_id, f"🟡 Какой артефакт повесите на пояс {slot + 1}?\nВыберите из доступных:", create_artifact_selection_keyboard(available_arts, 0))
-    return
-   else:
-    if belt[slot] is None:
-        await send_message(user_id, f"❌ Пояс {slot+1} пуст.", create_belt_slot_keyboard())
-     return
-    art = belt[slot]
-    belt[slot] = None
-    players[user_id]["belt"] = belt
-    players[user_id]["backpack"][art] = players[user_id]["backpack"].get(art, 0) + 1
-    players[user_id]["state"] = STATE_BELT_MAIN
-    save_data()
-        await send_message(user_id, f"✅ {art} снят с пояса {slot+1}.", create_belt_main_keyboard())
-    return
- if state == STATE_BELT_SELECT_ARTIFACT:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_BELT_SELECT_SLOT
-   players[user_id].pop("artifact_page", None)
-   save_data()
-        await send_message(user_id, "Выберите пояс:", create_belt_slot_keyboard())
-   return
-  available_arts = [art for art in ALL_ARTIFACTS if players[user_id]["backpack"].get(art, 0) > 0]
-  current_page = players[user_id].get("artifact_page", 0)
-  if text == "◀️ Туда":
-   if current_page > 0:
-    current_page -= 1
-    players[user_id]["artifact_page"] = current_page
-    save_data()
-   slot = players[user_id].get("pending_belt_slot", 0)
-        await send_message(user_id, f"🟡 Какой артефакт повесите на пояс {slot + 1}?\nСтраница {current_page + 1}:", create_artifact_selection_keyboard(available_arts, current_page))
-   return
-  if text == "▶️ Сюда":
-   items_per_page = 6
-   total_pages = (len(available_arts) + items_per_page - 1) // items_per_page
-   if current_page < total_pages - 1:
-    current_page += 1
-    players[user_id]["artifact_page"] = current_page
-    save_data()
-   slot = players[user_id].get("pending_belt_slot", 0)
-        await send_message(user_id, f"🟡 Какой артефакт повесите на пояс {slot + 1}?\nСтраница {current_page + 1}:", create_artifact_selection_keyboard(available_arts, current_page))
-   return
-  for art in ALL_ARTIFACTS:
-   if art.lower() == text.lower() or art[:20].lower() == text.lower():
-    if players[user_id]["backpack"].get(art, 0) > 0:
-     slot = players[user_id].get("pending_belt_slot", 0)
-     belt = players[user_id].get("belt", [None, None, None])
-     belt[slot] = art
-     players[user_id]["belt"] = belt
-     players[user_id]["backpack"][art] -= 1
-     if players[user_id]["backpack"][art] <= 0:
-      del players[user_id]["backpack"][art]
-     players[user_id]["state"] = STATE_BELT_MAIN
-     players[user_id].pop("artifact_page", None)
-     save_data()
-        await send_message(user_id, f"✅ {art} повешен на пояс {slot + 1}.", create_belt_main_keyboard())
-     return
-  slot = players[user_id].get("pending_belt_slot", 0)
-        await send_message(user_id, f"❌ Артефакт не найден или его нет в инвентаре.\n🟡 Какой артефакт повесите на пояс {slot + 1}?", create_artifact_selection_keyboard(available_arts, current_page))
-  return
- if state == STATE_USING_ITEM:
-  if text.lower() == "отмена":
-   players[user_id]["state"] = STATE_IN_BACKPACK
-   save_data()
-        await send_message(user_id, format_backpack_info(user_id), create_backpack_menu_keyboard())
-   return
-  else:
-   use_item(user_id, text)
-   players[user_id]["state"] = STATE_IN_BACKPACK
-   save_data()
-   return
- if state == STATE_TRADER_MAIN:
-  if not is_player_on_own_territory(user_id) and not has_active_donation(user_id):
-        await send_message(user_id, "❌ Торговец недоступен на вражеской территории.", create_main_menu_keyboard(user_id))
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-   return
-  if text == "💲 Приобрести":
-   players[user_id]["state"] = STATE_TRADER_BUY_CATEGORY
-   save_data()
-        await send_message(user_id, "Выберите категорию:", create_trader_category_keyboard())
-   return
-  elif text == "💱 Продать":
-   players[user_id]["state"] = STATE_TRADER_SELL_CATEGORY
-   save_data()
-        await send_message(user_id, "Выберите категорию:", create_trader_sell_category_keyboard())
-   return
-  elif text == "⚙️ Починить":
-   players[user_id]["state"] = STATE_TRADER_REPAIR
-   save_data()
-   p = players[user_id]
-   money = p.get("money", 0)
-   weapon = p.get("weapon", None)
-   weapon_dur = p.get("weapon_durability", 0)
-   weapon_max_dur = p.get("weapon_max_durability", 0)
-   armor = p.get("armor", None)
-   armor_dur = p.get("armor_durability", 0)
-   armor_max_dur = p.get("armor_max_durability", 0)
-   repair_text = (f"⚙️ Что собираетесь починить? 🧐\n❗️ Ремонт на 1 единицу осуществляется за 15р\n💲 Деньги: {money}р\n«🪖 Броня: {'отсутствует' if not armor else armor} 🔧{armor_dur}/{armor_max_dur}\n«🔫 Оружие: {'отсутствует' if not weapon else weapon} 🔧{weapon_dur}/{weapon_max_dur}")
-        await send_message(user_id, repair_text, create_repair_keyboard(user_id))
-   return
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-        await send_message(user_id, MAIN_MENU_TEXT, create_main_menu_keyboard(user_id))
-   return
- if state == STATE_TRADER_BUY_CATEGORY:
-  if text == "🥫 Провизия":
-   show_buy_provisions_menu(user_id)
-   return
-  elif text == "🪖 Снаряжение":
-   players[user_id]["state"] = STATE_TRADER_BUY_EQUIPMENT
-   save_data()
-        await send_message(user_id, "Выберите тип снаряжения:", create_equipment_category_keyboard())
-   return
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_TRADER_MAIN
-   save_data()
-        await send_message(user_id, "Вы хотите что либо 💲 приобрести или 💱 продать?", create_trader_main_keyboard())
-   return
- if state == STATE_TRADER_SELL_CATEGORY:
-  if text == "🥫 Провизия":
-   show_sell_provisions_menu(user_id)
-   return
-  elif text == "🪖 Снаряжение":
-   players[user_id]["state"] = STATE_TRADER_SELL_EQUIPMENT_CONFIRM
-   save_data()
-        await send_message(user_id, "Выберите категорию снаряжения для продажи:", create_equipment_sell_keyboard())
-   return
-  elif text == "🌕 Артефакты":
-   show_sell_artifacts_menu(user_id)
-   return
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_TRADER_MAIN
-   save_data()
-        await send_message(user_id, "Вы хотите что либо 💲 приобрести или 💱 продать?", create_trader_main_keyboard())
-   return
- if state == STATE_TRADER_SELL_ARTIFACTS:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_TRADER_SELL_CATEGORY
-   save_data()
-        await send_message(user_id, "Выберите категорию:", create_trader_sell_category_keyboard())
-   return
-  else:
-   handle_trader_sell_artifact(user_id, text)
-   return
- if state == STATE_TRADER_BUY:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_TRADER_BUY_CATEGORY
-   save_data()
-        await send_message(user_id, "Выберите категорию:", create_trader_category_keyboard())
-   return
-  else:
-   handle_trader_buy(user_id, text)
-   return
- if state == STATE_TRADER_SELL:
-  if text == "🎒 Рюкзак":
-   upload_and_send_inventory(user_id)
-   return
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_TRADER_SELL_CATEGORY
-   save_data()
-        await send_message(user_id, "Выберите категорию:", create_trader_sell_category_keyboard())
-   return
-  else:
-   handle_trader_sell(user_id, text)
-   return
- if state == STATE_TRADER_BUY_EQUIPMENT:
-  if text == "🔫 Оружие":
-   eq_type = "weapon"
-  elif text == "🦺 Броня":
-   eq_type = "armor"
-  elif text == "📟 Детекторы":
-   eq_type = "detector"
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_TRADER_BUY_CATEGORY
-   save_data()
-        await send_message(user_id, "Выберите категорию:", create_trader_category_keyboard())
-   return
-  else:
-        await send_message(user_id, "Выберите тип снаряжения:", create_equipment_category_keyboard())
-   return
-  faction = players[user_id]["faction"]
-  money = players[user_id].get("money", 0)
-  if eq_type == "detector":
-   msg_lines = [f"💲 Ваши деньги: {money}р", "", "📟 ДЕТЕКТОРЫ", ""]
-   sorted_detectors = sorted(DETECTORS.items(), key=lambda x: x[1]["price"])
-   num = 1
-   for name, data in sorted_detectors:
-    msg_lines.append(f"{num}️⃣ «{name}» — 💰{data['price']}р (⚡{data['charge']})")
-    num += 1
-   msg_lines.append("")
-   msg_lines.append("📌 ⚡ — заряд")
-   msg_lines.append("")
-   msg_lines.append("✍️ Напишите точное название детектора для покупки:")
-        await send_message(user_id, "\n".join(msg_lines), create_back_only_keyboard())
-   players[user_id]["pending_buy_type"] = "detector"
-   players[user_id]["state"] = STATE_TRADER_BUY_EQUIPMENT_CONFIRM
-   save_data()
-   return
-  items = EQUIPMENT[faction][eq_type]
-  if eq_type == "weapon":
-   sorted_items = sorted(items, key=lambda x: x[4])
-   msg_lines = [f"💲 Ваши деньги: {money}р", "", f"🔫 ОРУЖИЕ ({faction})", ""]
-   for i, item in enumerate(sorted_items, 1):
-    name, dur, dmg, acc, price = item
-    msg_lines.append(f"{i}️⃣ {name} — 💰{price}р")
-    msg_lines.append(f"   🔧[{dur}/{dur}] ; 💢[{dmg}] ; 🎯[{acc}]")
-   msg_lines.append("")
-   msg_lines.append("✍️ Напишите точное название для покупки:")
-  else:
-   sorted_items = sorted(items, key=lambda x: x[5])
-   msg_lines = [f"💲 Ваши деньги: {money}р", "", f"🦺 БРОНЯ ({faction})", ""]
-   for i, item in enumerate(sorted_items, 1):
-    name, dur, shield, blast, anom, price = item
-    msg_lines.append(f"{i}️⃣ {name} — 💰{price}р")
-    msg_lines.append(f"   🔧[{dur}/{dur}] ; 🛡️[{shield}] ; 🐾[{blast}] ; 💥[{anom}]")
-   msg_lines.append("")
-   msg_lines.append("✍️ Напишите точное название для покупки:")
-        await send_message(user_id, "\n".join(msg_lines), create_back_only_keyboard())
-  players[user_id]["pending_buy_type"] = eq_type
-  players[user_id]["state"] = STATE_TRADER_BUY_EQUIPMENT_CONFIRM
-  save_data()
-  return
- if state == STATE_TRADER_BUY_EQUIPMENT_CONFIRM:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_TRADER_BUY_EQUIPMENT
-   players[user_id]["pending_buy_type"] = None
-   save_data()
-        await send_message(user_id, "Выберите тип снаряжения:", create_equipment_category_keyboard())
-   return
-  item_name = text.strip()
-  item_type = players[user_id].get("pending_buy_type")
-  faction = players[user_id]["faction"]
-  valid_names = []
-  if item_type == "detector":
-   valid_names = list(DETECTORS.keys())
-  else:
-   valid_names = [item[0] for item in EQUIPMENT[faction][item_type]]
-  if item_name in valid_names:
-   price = None
-   if item_type == "detector":
-    price = DETECTORS[item_name]["price"]
-   else:
-    for item in EQUIPMENT[faction][item_type]:
-     if item[0] == item_name:
-      price = item[4] if item_type == "weapon" else item[5]
-      break
-   if players[user_id]["money"] < price:
-        await send_message(user_id, f"❌ Недостаточно денег. Нужно {price}р.", create_back_only_keyboard())
-    return
-   players[user_id]["pending_buy_item"] = item_name
-        await send_message(user_id, f"Вы уверены, что хотите купить {item_name} за {price}р?", create_confirmation_keyboard())
-   players[user_id]["state"] = "confirming_equipment_buy"
-   save_data()
-  else:
-        await send_message(user_id, "❌ Неверное название. Попробуйте снова:", create_back_only_keyboard())
-  return
- if state == "confirming_equipment_buy":
-  handle_equipment_buy_confirmation(user_id, text)
-  return
- if state == STATE_TRADER_SELL_EQUIPMENT_CONFIRM:
-  handle_equipment_sell_confirmation(user_id, text)
-  return
- if state == STATE_TRADER_SELL_EQUIPMENT:
-  if text == "✅ Да" or text == "❌ Нет":
-   handle_equipment_sell_final(user_id, text)
-   return
-  else:
-        await send_message(user_id, "Подтвердите действие:", create_confirmation_keyboard())
-  return
- if state == STATE_TRADER_REPAIR:
-  handle_repair(user_id, text)
-  return
- if text.lower() == "/start":
-  players[user_id]["state"] = STATE_WAITING_FOR_START
-  save_data()
-        await send_message(user_id, f"Привет, {players[user_id]['name']}! 👋\nНажми кнопку «Старт», чтобы начать игру.", create_start_keyboard())
-  return
- if state == STATE_WAITING_FOR_START:
-  if text == "Старт":
-   players[user_id]["state"] = STATE_READING_INSTRUCTIONS
-   save_data()
-        await send_message(user_id, GAME_INFO_TEXT, create_next_keyboard())
-   return
- if state == STATE_READING_INSTRUCTIONS:
-  if text == "Далее":
-   players[user_id]["state"] = STATE_CHOOSING_FACTION
-   save_data()
-        await send_message(user_id, "Выбери свою группировку:", create_faction_keyboard())
-   return
- if state == STATE_CHOOSING_FACTION:
-  faction_name = None
-  if "Долг" in text:
-   faction_name = "🛡️ Долг"
-  elif "Грех" in text:
-   faction_name = "☦️ Грех"
-  elif "Одиночки" in text:
-   faction_name = "☢️ Одиночки"
-  if faction_name:
-   if len(factions[faction_name]) >= MAX_FACTION_SIZES[faction_name]:
-    all_full = True
-    for f in factions:
-     if len(factions[f]) < MAX_FACTION_SIZES[f]:
-      all_full = False
-      break
-    if all_full:
-        await send_message(user_id, "⏳ Все группировки заполнены. Дождитесь открытия новых мест.", create_faction_keyboard())
-    else:
-        await send_message(user_id, f"❌ В группировке «{faction_name}» уже максимум игроков. Выбери другую.", create_faction_keyboard())
-   else:
-    was_closed = not is_game_open()
-    factions[faction_name].append(user_id)
-    players[user_id]["faction"] = faction_name
-    start_loc, start_point = find_start_position(faction_name)
-    players[user_id]["location"] = start_loc
-    players[user_id]["point"] = start_point
-    players[user_id]["state"] = STATE_ENTERING_NICKNAME
-    save_data()
-    chat_link = FACTION_CHAT_LINKS.get(faction_name, "")
-    await send_message(user_id, f"✅ Вы вступили в группировку {faction_name}!\n\n💬 Ссылка на беседу группировки:\n{chat_link}\n\nТеперь придумай себе кличку в Зоне:", None)
-   return
- if state == STATE_ENTERING_NICKNAME:
-  nickname = text.strip()
-  if nickname:
-   players[user_id]["nickname"] = nickname
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-        await send_message(user_id, f"Удачной охоты, {nickname}! 🎯\n{MAIN_MENU_TEXT}", create_main_menu_keyboard(user_id))
-  return
- if state == STATE_IN_MENU:
-  if text == "🏕️ Лагерь":
-   players[user_id]["state"] = STATE_IN_CAMP
-   save_data()
-        await send_message(user_id, format_camp_info(user_id), create_camp_menu_keyboard())
-  elif text == "👣 Переход":
-   players[user_id]["state"] = STATE_IN_TRANSITION_MENU
-   save_data()
-   current_loc = players[user_id]["location"]
-   current_point = players[user_id]["point"]
-   send_location_image(user_id, current_loc, current_point, f"📍 Ваше местоположение: {current_loc} {current_point}\nВыбери локацию для перехода:", create_transition_keyboard(user_id))
-  elif text == get_main_menu_button(players[user_id]["point"], players[user_id]["location"]):
-   handle_exploration(user_id)
-   return
-  elif text == "🛒 Торговец":
-   players[user_id]["state"] = STATE_TRADER_MAIN
-   save_data()
-        await send_message(user_id, "Вы хотите что либо 💲 приобрести или 💱 продать?", create_trader_main_keyboard())
-   return
-  elif text == "🧰 Склад":
-   players[user_id]["state"] = STATE_WAREHOUSE
-   save_data()
-   upload_and_send_warehouse_global(user_id)
-   return
-  elif text == "⚔️ Война Группировок":
-   players[user_id]["state"] = STATE_WAR_MAIN
-   save_data()
-        await send_message(user_id, "⚔️ Война Группировок — захватывай территории и развивай свою группировку!", create_war_main_keyboard())
-   return
-  else:
-        await send_message(user_id, MAIN_MENU_TEXT, create_main_menu_keyboard(user_id))
-  return
- if state == STATE_IN_TRANSITION_MENU:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-        await send_message(user_id, MAIN_MENU_TEXT, create_main_menu_keyboard(user_id))
-   return
-  current_loc = players[user_id]["location"]
-  current_point = players[user_id]["point"]
-  if text == f"▶️ {current_loc} ◀️":
-   players[user_id]["state"] = STATE_WAITING_FOR_POINT
-   save_data()
-   if not send_location_map(user_id, current_loc):
-        await send_message(user_id, '🌐 Впишите название точки на карте, на которую собираетесь перейти:\n❕ Пример: "ТР1", "Б1".', None)
-   return
-  elif text in ["Кордон", "Свалка", "Тёмная долина", "Поляна"]:
-   if text == current_loc:
-        await send_message(user_id, "Вы уже здесь.", create_transition_keyboard(user_id))
-    return
-   if can_transition_from(current_loc, current_point):
-    transitions = get_available_transitions(current_loc, current_point)
-    target = None
-    for (tloc, tpoint) in transitions:
-     if tloc == text:
-      target = (tloc, tpoint)
-      break
-    if target:
-     players[user_id]["pending_transition"] = target
-     players[user_id]["state"] = STATE_CONFIRMING_TRANSITION
-     save_data()
-        await send_message(user_id, f"Вы хотите перейти на {target[0]} {target[1]}?", create_confirmation_keyboard())
-    else:
-        await send_message(user_id, "❌ Переход на эту локацию невозможен из текущего места.", create_transition_keyboard(user_id))
-   else:
-        await send_message(user_id, "❌ Из этой точки нельзя перейти на другую локацию.", create_transition_keyboard(user_id))
-   return
-  return
- if state == STATE_CONFIRMING_TRANSITION:
-  pending = players[user_id].get("pending_transition")
-  if not pending:
-   players[user_id]["state"] = STATE_IN_TRANSITION_MENU
-   save_data()
-        await send_message(user_id, "Ошибка подтверждения.", create_transition_keyboard(user_id))
-   return
-  if text == "✅ Да":
-   target_loc, target_point = pending
-   target_owner = get_territory_owner(target_loc, target_point)
-   player_faction = players[user_id]["faction"]
-   if target_owner is not None and target_owner != player_faction:
-        await send_message(user_id, "❌ Эта территория не принадлежит вашей группировке. Переход невозможен.", create_transition_keyboard(user_id))
-    players[user_id]["state"] = STATE_IN_TRANSITION_MENU
-    players[user_id].pop("pending_transition", None)
-    save_data()
-    return
-   ok, msg = check_vital_conditions(user_id, "переход")
-   if not ok:
-        await send_message(user_id, msg, create_transition_keyboard(user_id))
-    players[user_id]["state"] = STATE_IN_TRANSITION_MENU
-    players[user_id].pop("pending_transition", None)
-    save_data()
-    return
-   players[user_id]["previous_location"] = players[user_id]["location"]
-   players[user_id]["previous_point"] = players[user_id]["point"]
-   players[user_id]["stamina"] -= 3
-   players[user_id]["hunger"] += 2
-   players[user_id]["location"], players[user_id]["point"] = target_loc, target_point
-   transition_time = 1800
-   if has_active_donation(user_id):
-    transition_time = 900
-   players[user_id]["transition_end_time"] = time.time() + transition_time
-   players[user_id]["state"] = STATE_TRANSITION_WAIT
-   save_data()
-   time_text = "30 минут" if transition_time == 1800 else "15 минут"
-   await send_message(user_id, f"🚶‍♂️ Вы начали переход на {target_loc} {target_point}. Ожидание: {time_text}.", None)
-   return
-  elif text == "❌ Нет":
-   players[user_id]["state"] = STATE_IN_TRANSITION_MENU
-   players[user_id].pop("pending_transition", None)
-   save_data()
-        await send_message(user_id, "Выбери локацию для перехода:", create_transition_keyboard(user_id))
-   return
-  return
- if state == STATE_WAITING_FOR_POINT:
-  point = text.upper().strip()
-  current_loc = players[user_id]["location"]
-  current_point = players[user_id]["point"]
-  if point == current_point:
-        await send_message(user_id, "❌ Вы уже находитесь на этой точке.", create_main_menu_keyboard(user_id))
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-   return
-  if is_valid_point(current_loc, point):
-   target_owner = get_territory_owner(current_loc, point)
-   player_faction = players[user_id]["faction"]
-   if target_owner is not None and target_owner != player_faction:
-        await send_message(user_id, "❌ Эта территория не принадлежит вашей группировке. Переход невозможен.", create_main_menu_keyboard(user_id))
-    players[user_id]["state"] = STATE_IN_MENU
-    save_data()
-    return
-   ok, msg = check_vital_conditions(user_id, "переход")
-   if not ok:
-        await send_message(user_id, msg, create_main_menu_keyboard(user_id))
-    players[user_id]["state"] = STATE_IN_MENU
-    save_data()
-    return
-   players[user_id]["previous_location"] = players[user_id]["location"]
-   players[user_id]["previous_point"] = players[user_id]["point"]
-   players[user_id]["stamina"] -= 3
-   players[user_id]["hunger"] += 2
-   players[user_id]["point"] = point
-   transition_time = 1800
-   if has_active_donation(user_id):
-    transition_time = 900
-   players[user_id]["transition_end_time"] = time.time() + transition_time
-   players[user_id]["state"] = STATE_TRANSITION_WAIT
-   save_data()
-   time_text = "30 минут" if transition_time == 1800 else "15 минут"
-   await send_message(user_id, f"🚶‍♂️ Вы начали переход на {current_loc} {point}. Ожидание: {time_text}.", None)
-  else:
-        await send_message(user_id, f"❌ Такой точки не существует в локации «{current_loc}».", create_main_menu_keyboard(user_id))
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-  return
- if state == STATE_IN_CAMP:
-  if text == "🎒 Рюкзак":
-   players[user_id]["state"] = STATE_IN_BACKPACK
-   save_data()
-   upload_and_send_inventory(user_id)
-   return
-  elif text == "🟡 Пояс":
-   players[user_id]["state"] = STATE_BELT_MAIN
-   save_data()
-   belt = players[user_id].get("belt", [None, None, None])
-   belt_info = (f"🟡 Пояс:\n1️⃣ {belt[0] or 'пусто'}\n2️⃣ {belt[1] or 'пусто'}\n3️⃣ {belt[2] or 'пусто'}\n💡 Быстрые команды:\n«Повесить [артефакт]»\n«Снять [артефакт]»")
-        await send_message(user_id, belt_info, create_belt_main_keyboard())
-   return
-  elif text == "💤 Отдых":
-   players[user_id]["state"] = STATE_RESTING
-   players[user_id]["rest_start_time"] = time.time()
-   players[user_id]["initial_stamina"] = players[user_id]["stamina"]
-   save_data()
-   stamina = players[user_id]["stamina"]
-   rest_text = (f"⚡ Ваша выносливость: {stamina}/10\n😴 Во время отдыха, ваша выносливость пополняется на 1 каждые 6 минут.\n⚡ Выпив стимулирующий напиток, вы можете пополнить свою выносливость\n🌕 Также, некоторые артефакты могут восстанавливать выносливость в несколько раз быстрее")
-        await send_message(user_id, rest_text, create_resting_keyboard())
-   return
-  elif text == "🔋 Подзарядка":
-   p = players[user_id]
-   detector = p.get("detector")
-   detector_charge = p.get("detector_charge", 0)
-   detector_max_charge = p.get("detector_max_charge", 0)
-   if not detector or detector_max_charge <= 0:
-        await send_message(user_id, "❌ У вас нет детектора.", create_camp_menu_keyboard())
-    return
-   if detector_charge >= detector_max_charge:
-        await send_message(user_id, "🔋 Детектор уже полностью заряжен.", create_camp_menu_keyboard())
-    return
-   batteries_needed = detector_max_charge - detector_charge
-   batteries_have = p["backpack"].get("батарейки", 0)
-   if batteries_have <= 0:
-        await send_message(user_id, "❌ У вас нет батареек для подзарядки.", create_camp_menu_keyboard())
-    return
-   batteries_used = min(batteries_needed, batteries_have)
-   p["detector_charge"] = detector_charge + batteries_used
-   p["backpack"]["батарейки"] -= batteries_used
-   if p["backpack"]["батарейки"] <= 0:
-    del p["backpack"]["батарейки"]
-   save_data()
-        await send_message(user_id, f"✅ Детектор заряжен на {batteries_used} единиц.\n📟 Заряд: {p['detector_charge']}/{detector_max_charge}", create_camp_menu_keyboard())
-   return
-  elif text.startswith("📊 Статус выброса:"):
-   status = get_emission_status()
-   restored_text = ", ".join(last_restored_categories) if last_restored_categories else "нет данных"
-   msg = (f"📊 Статус выброса: {status}\nОчков: {emission_counter}/{EMISSION_MAX}\n♻️ Восстановлены:\n{restored_text}")
-        await send_message(user_id, msg, create_camp_menu_keyboard())
-   return
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-        await send_message(user_id, MAIN_MENU_TEXT, create_main_menu_keyboard(user_id))
-   return
- if state == STATE_IN_BACKPACK:
-  if text in ["Назад", "🔚 Назад"]:
-   players[user_id]["state"] = STATE_IN_CAMP
-   save_data()
-        await send_message(user_id, format_camp_info(user_id), create_camp_menu_keyboard())
-   return
-  elif text == "❇️ Использовать":
-   players[user_id]["state"] = STATE_USING_ITEM
-   save_data()
-        await send_message(user_id, "Напишите название предмета и количество (например: хлеб 2):", create_use_item_keyboard())
-   return
-  elif text == "♻️ Сортировка":
-   current = get_sort_mode(user_id)
-   set_sort_mode(user_id, current + 1)
-   mode_names = ["обычная", "по типу", "по количеству"]
-   new_mode = mode_names[players[user_id]["backpack_sort"]]
-   await send_message(user_id, f"🔄 Сортировка изменена на: {new_mode}", None)
-   upload_and_send_inventory(user_id)
-   return
-  elif text == "🔄 Обновить":
-   upload_and_send_inventory(user_id)
-   return
-  elif text == "💡 инфо":
-        await send_message(user_id, format_minimal_info(user_id), create_backpack_menu_keyboard())
-   return
-  return
- if state == STATE_WAREHOUSE:
-  if text in ["Назад", "🔚 Назад", "🧰 Склад"]:
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-        await send_message(user_id, MAIN_MENU_TEXT, create_main_menu_keyboard(user_id))
-   return
-  else:
-   handle_warehouse_action(user_id, text)
-   return
- if state == STATE_CONFIRMING_EQUIPMENT_SELL:
-  handle_equipment_sell_final(user_id, text)
-  return
- if state == STATE_RESTING:
-  if text == "✅ Достаточно отдыха":
-   players[user_id]["state"] = STATE_IN_CAMP
-   players[user_id]["rest_start_time"] = None
-   players[user_id].pop("initial_stamina", None)
-   save_data()
-        await send_message(user_id, format_camp_info(user_id), create_camp_menu_keyboard())
-   return
-  start_time = players[user_id].get("rest_start_time")
-  if start_time:
-   elapsed = time.time() - start_time
-   initial = players[user_id].get("initial_stamina", players[user_id]["stamina"])
-   belt_bonus = apply_belt_effects_on_rest(user_id)
-   donation_bonus = 1 if has_active_donation(user_id) else 0
-   new_stamina = min(10, initial + int(elapsed // 360) * (1 + belt_bonus + donation_bonus))
-   if new_stamina > players[user_id]["stamina"]:
-    players[user_id]["stamina"] = new_stamina
-    save_data()
-    if new_stamina == 5:
-        await send_message(user_id, "⚡ Ваша выносливость достигла 5/10.", create_resting_keyboard())
-    elif new_stamina >= 10:
-     players[user_id]["stamina"] = 10
-     players[user_id]["state"] = STATE_IN_CAMP
-     players[user_id]["rest_start_time"] = None
-     players[user_id].pop("initial_stamina", None)
-     save_data()
-        await send_message(user_id, "😴 Вы отдохнули и полностью восстановили выносливость.", create_camp_menu_keyboard())
-     return
-   stamina = players[user_id]["stamina"]
-   rest_text = (f"⚡ Ваша выносливость: {stamina}/10\n😴 Во время отдыха, ваша выносливость пополняется на 1 каждые 6 минут.\n⚡ Выпив стимулирующий напиток, вы можете пополнить свою выносливость\n🌕 Также, некоторые артефакты могут восстанавливать выносливость в несколько раз быстрее")
-        await send_message(user_id, rest_text, create_resting_keyboard())
-   return
- if state == STATE_WAR_MAIN:
-  if text == "🗺️ Территории зоны 🗺️":
-   players[user_id]["state"] = STATE_WAR_TERRITORIES
-   save_data()
-        await send_message(user_id, "Выберите локацию для просмотра:", create_war_territories_keyboard())
-   return
-  elif text == "💲 Приобрести сквад":
-   p = players[user_id]
-   msg = (f"💲 Деньги: {p.get('money', 0)}р\n🍖 Еда: {p.get('food_units', 0)} единиц\n⚕ Медицина: {p.get('med_units', 0)} единиц\n☢ Рад. препараты: {p.get('rad_units', 0)} единиц\nКакой сквад приобретете?\n👨‍👦 1 сквад 1 сила - 💲100р, 🍖 5 ед. еды, ⚕ 5 ед. мед., ☢ 5 ед. рад.\n👨‍👦‍👦 3 сквада 3 силы - 💲300р, 🍖 10 ед. еды, ⚕ 10 ед. мед., ☢ 10 ед. рад.\n👨‍👨‍👦‍👦 5 сквадов 5 сил - 💲500р, 🍖 15 ед. еды, ⚕ 15 ед. мед., ☢ 15 ед. рад.")
-   players[user_id]["state"] = STATE_WAR_BUY_SQUAD
-   save_data()
-        await send_message(user_id, msg, create_war_buy_squad_keyboard())
-   return
-  elif text == "♻️ Управление сквадами":
-   p = players[user_id]
-   msg = (f"👨‍👨‍👦‍👦 Ваши сквады: {p.get('squads', 0)}\nКак собираетесь ими распорядиться?\n\n💡 При отправке можно узнать сквады на своей точке:\nинфо [локация] [точка]\nПример: инфо кордон б1")
-   players[user_id]["state"] = STATE_WAR_MANAGE_SQUADS
-   save_data()
-        await send_message(user_id, msg, create_war_manage_keyboard())
-   return
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-        await send_message(user_id, MAIN_MENU_TEXT, create_main_menu_keyboard(user_id))
-   return
-  return
- if state == STATE_WAR_TERRITORIES:
-  if text in ["Кордон", "Свалка", "Тёмная долина", "Поляна"]:
-   send_war_map(user_id, text, f"📍 Локация: {text}", create_war_territories_keyboard())
-   return
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_WAR_MAIN
-   save_data()
-        await send_message(user_id, "⚔️ Война Группировок", create_war_main_keyboard())
-   return
-  return
- if state == STATE_WAR_BUY_SQUAD:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_WAR_MAIN
-   save_data()
-        await send_message(user_id, "⚔️ Война Группировок", create_war_main_keyboard())
-   return
-  elif text == "♻️ Конвертация провизии":
-   p = players[user_id]
-   msg = (f"♻ Что хотите конвертировать в единицы?\n❕ Пример: Хлеб 1; Бинт 2; Водка 3.\n\n🍖 Еда: {p.get('food_units', 0)} единиц\n⚕ Медицина: {p.get('med_units', 0)} единиц\n☢ Рад. препараты: {p.get('rad_units', 0)} единиц\n\nДоступные предметы:\n🍖 шоколадный батончик(1), хлеб(2), колбаса(3), консерва(4)\n⚕ бинт(1), аптечка(2), армейская аптечка(3), научная аптечка(3+1☢)\n☢ сигареты(1), водка(2), радиопротектор(3), антирад(4)")
-   players[user_id]["state"] = STATE_WAR_CONVERT
-   save_data()
-        await send_message(user_id, msg, create_back_only_keyboard())
-   return
-  elif text == "1 сквад":
-   p = players[user_id]
-   squad_count = 1
-   cost = SQUAD_COSTS[squad_count]
-   if p.get("money", 0) < cost["money"]:
-        await send_message(user_id, f"❌ Недостаточно денег. Нужно {cost['money']}р.", create_war_buy_squad_keyboard())
-    return
-   if p.get("food_units", 0) < cost["food"]:
-        await send_message(user_id, f"❌ Недостаточно еды. Нужно {cost['food']} единиц.", create_war_buy_squad_keyboard())
-    return
-   if p.get("med_units", 0) < cost["med"]:
-        await send_message(user_id, f"❌ Недостаточно медицины. Нужно {cost['med']} единиц.", create_war_buy_squad_keyboard())
-    return
-   if p.get("rad_units", 0) < cost["rad"]:
-        await send_message(user_id, f"❌ Недостаточно рад. препаратов. Нужно {cost['rad']} единиц.", create_war_buy_squad_keyboard())
-    return
-   p["money"] -= cost["money"]
-   p["food_units"] -= cost["food"]
-   p["med_units"] -= cost["med"]
-   p["rad_units"] -= cost["rad"]
-   p["squads"] = p.get("squads", 0) + squad_count
-   save_data()
-        await send_message(user_id, f"✅ Приобретено {squad_count} сквад! Всего: {p['squads']}", create_war_buy_squad_keyboard())
-   return
-  elif text == "3 сквада":
-   p = players[user_id]
-   squad_count = 3
-   cost = SQUAD_COSTS[squad_count]
-   if p.get("money", 0) < cost["money"]:
-        await send_message(user_id, f"❌ Недостаточно денег. Нужно {cost['money']}р.", create_war_buy_squad_keyboard())
-    return
-   if p.get("food_units", 0) < cost["food"]:
-        await send_message(user_id, f"❌ Недостаточно еды. Нужно {cost['food']} единиц.", create_war_buy_squad_keyboard())
-    return
-   if p.get("med_units", 0) < cost["med"]:
-        await send_message(user_id, f"❌ Недостаточно медицины. Нужно {cost['med']} единиц.", create_war_buy_squad_keyboard())
-    return
-   if p.get("rad_units", 0) < cost["rad"]:
-        await send_message(user_id, f"❌ Недостаточно рад. препаратов. Нужно {cost['rad']} единиц.", create_war_buy_squad_keyboard())
-    return
-   p["money"] -= cost["money"]
-   p["food_units"] -= cost["food"]
-   p["med_units"] -= cost["med"]
-   p["rad_units"] -= cost["rad"]
-   p["squads"] = p.get("squads", 0) + squad_count
-   save_data()
-        await send_message(user_id, f"✅ Приобретено {squad_count} сквада! Всего: {p['squads']}", create_war_buy_squad_keyboard())
-   return
-  elif text == "5 сквадов":
-   p = players[user_id]
-   squad_count = 5
-   cost = SQUAD_COSTS[squad_count]
-   if p.get("money", 0) < cost["money"]:
-        await send_message(user_id, f"❌ Недостаточно денег. Нужно {cost['money']}р.", create_war_buy_squad_keyboard())
-    return
-   if p.get("food_units", 0) < cost["food"]:
-        await send_message(user_id, f"❌ Недостаточно еды. Нужно {cost['food']} единиц.", create_war_buy_squad_keyboard())
-    return
-   if p.get("med_units", 0) < cost["med"]:
-        await send_message(user_id, f"❌ Недостаточно медицины. Нужно {cost['med']} единиц.", create_war_buy_squad_keyboard())
-    return
-   if p.get("rad_units", 0) < cost["rad"]:
-        await send_message(user_id, f"❌ Недостаточно рад. препаратов. Нужно {cost['rad']} единиц.", create_war_buy_squad_keyboard())
-    return
-   p["money"] -= cost["money"]
-   p["food_units"] -= cost["food"]
-   p["med_units"] -= cost["med"]
-   p["rad_units"] -= cost["rad"]
-   p["squads"] = p.get("squads", 0) + squad_count
-   save_data()
-        await send_message(user_id, f"✅ Приобретено {squad_count} сквадов! Всего: {p['squads']}", create_war_buy_squad_keyboard())
-   return
-  else:
-   p = players[user_id]
-   msg = (f"❌ Неизвестная команда.\n\n💲 Деньги: {p.get('money', 0)}р\n🍖 Еда: {p.get('food_units', 0)} единиц\n⚕ Медицина: {p.get('med_units', 0)} единиц\n☢ Рад. препараты: {p.get('rad_units', 0)} единиц\n\nВыберите сквад для покупки:")
-        await send_message(user_id, msg, create_war_buy_squad_keyboard())
-   return
- if state == STATE_WAR_CONVERT:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_WAR_BUY_SQUAD
-   save_data()
-   p = players[user_id]
-   msg = f"💲 Деньги: {p.get('money', 0)}р\n🍖 Еда: {p.get('food_units', 0)} единиц\n⚕ Медицина: {p.get('med_units', 0)} единиц\n☢ Рад. препараты: {p.get('rad_units', 0)} единиц\nКакой сквад приобретете?"
-        await send_message(user_id, msg, create_war_buy_squad_keyboard())
-   return
-  p = players[user_id]
-  conversions = text.split(";")
-  total_converted = {"food": 0, "med": 0, "rad": 0}
-  errors = []
-  for conv in conversions:
-   conv = conv.strip()
-   if not conv:
-    continue
-   words = conv.split()
-   if len(words) < 2:
-    errors.append(f"❌ Неверный формат: '{conv}'")
-    continue
-   try:
-    count = int(words[-1])
-    item_name = " ".join(words[:-1]).lower()
-   except:
-    errors.append(f"❌ '{words[-1]}' не число")
-    continue
-   if count <= 0:
-    errors.append("❌ Количество должно быть больше 0")
-    continue
-   if item_name not in CONVERSION_VALUES:
-    errors.append(f"❌ '{' '.join(words[:-1])}' нельзя конвертировать")
-    continue
-   if p["backpack"].get(item_name, 0) < count:
-    errors.append(f"❌ Недостаточно '{' '.join(words[:-1])}' (есть: {p['backpack'].get(item_name, 0)})")
-    continue
-   conv_data = CONVERSION_VALUES[item_name]
-   p["backpack"][item_name] -= count
-   if p["backpack"][item_name] <= 0:
-    del p["backpack"][item_name]
-   if conv_data["type"] == "special":
-    med_value = conv_data.get("med", 0) * count
-    rad_value = conv_data.get("rad", 0) * count
-    p["med_units"] = p.get("med_units", 0) + med_value
-    p["rad_units"] = p.get("rad_units", 0) + rad_value
-    total_converted["med"] += med_value
-    total_converted["rad"] += rad_value
-   else:
-    unit_type = conv_data["type"]
-    unit_value = conv_data["value"] * count
-    if unit_type == "food":
-     p["food_units"] = p.get("food_units", 0) + unit_value
-    elif unit_type == "med":
-     p["med_units"] = p.get("med_units", 0) + unit_value
-    elif unit_type == "rad":
-     p["rad_units"] = p.get("rad_units", 0) + unit_value
-    total_converted[unit_type] += unit_value
-  save_data()
-  msg_parts = []
-  if total_converted["food"] > 0 or total_converted["med"] > 0 or total_converted["rad"] > 0:
-   msg_parts.append("✅ Конвертировано:")
-   if total_converted["food"] > 0:
-    msg_parts.append(f"🍖 Еда: +{total_converted['food']} единиц")
-   if total_converted["med"] > 0:
-    msg_parts.append(f"⚕ Медицина: +{total_converted['med']} единиц")
-   if total_converted["rad"] > 0:
-    msg_parts.append(f"☢ Рад. препараты: +{total_converted['rad']} единиц")
-  if errors:
-   msg_parts.append("")
-   msg_parts.extend(errors)
-  msg_parts.append("")
-  msg_parts.append(f"Текущие запасы:\n🍖 Еда: {p.get('food_units', 0)} единиц\n⚕ Медицина: {p.get('med_units', 0)} единиц\n☢ Рад. препараты: {p.get('rad_units', 0)} единиц")
-  msg_parts.append("\nВведите ещё предметы или нажмите Назад")
-        await send_message(user_id, "\n".join(msg_parts), create_back_only_keyboard())
-  return
- if state == STATE_WAR_MANAGE_SQUADS:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_WAR_MAIN
-   save_data()
-        await send_message(user_id, "⚔️ Война Группировок", create_war_main_keyboard())
-   return
-  elif text == "📤 Отправить":
-   p = players[user_id]
-   current_loc = p["location"]
-   players[user_id]["state"] = STATE_WAR_SEND_SQUAD_LOCATION
-   players[user_id]["squad_action"] = "send"
-   save_data()
-        await send_message(user_id, f"🗺️ Вы находитесь на локации: {current_loc}\nВыберите локацию для отправки сквадов:", create_war_send_location_keyboard(user_id))
-   return
-  elif text == "📥 Вывести":
-   players[user_id]["state"] = STATE_WAR_SEND_SQUAD_LOCATION
-   players[user_id]["squad_action"] = "withdraw"
-   save_data()
-        await send_message(user_id, "🗺️ Выберите локацию для вывода сквадов:", create_war_send_location_keyboard(user_id))
-   return
-  elif text == "👥 Общие сквады":
-   p = players[user_id]
-   faction = p["faction"]
-   shared = faction_shared_squads.get(faction, 0)
-   players[user_id]["state"] = STATE_WAR_SHARED_SQUADS
-   save_data()
-   msg = f"👥 Общие сквады группировки {faction}: {shared}\nВаши сквады: {p.get('squads', 0)}"
-        await send_message(user_id, msg, create_shared_squads_keyboard())
-   return
-  return
- if state == STATE_WAR_SEND_SQUAD_LOCATION:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_WAR_MANAGE_SQUADS
-   save_data()
-   p = players[user_id]
-   msg = f"👨‍👨‍👦‍👦 Ваши сквады: {p.get('squads', 0)}\nКак собираетесь ими распорядиться?"
-        await send_message(user_id, msg, create_war_manage_keyboard())
-   return
-  if text in ["Кордон", "Свалка", "Тёмная долина", "Поляна"]:
-   p = players[user_id]
-   action = p.get("squad_action", "send")
-   current_loc = p["location"]
-   current_point = p["point"]
-   if action == "send":
-    if text != current_loc:
-     available_transitions = get_available_transitions(current_loc, current_point)
-     valid_border_points = [tp for tl, tp in available_transitions if tl == text]
-     if valid_border_points:
-      players[user_id]["pending_squad_location"] = text
-      players[user_id]["pending_border_points"] = valid_border_points
-      players[user_id]["state"] = STATE_WAR_SEND_SQUAD_POINT
-      save_data()
-      border_info = ", ".join(valid_border_points)
-      msg = f"🗺️ Локация: {text}\n📍 Вы на точке перехода! Доступные граничащие точки: {border_info}\nВведите точку и количество сквадов (например: {valid_border_points[0]} 5):"
-      send_war_map(user_id, text, msg, create_back_only_keyboard())
-      return
-     else:
-        await send_message(user_id, f"❌ Вы можете отправлять сквады только на локацию, где находитесь ({current_loc}), или на граничащие точки с точек перехода.", create_war_send_location_keyboard(user_id))
-      return
-   players[user_id]["pending_squad_location"] = text
-   players[user_id]["pending_border_points"] = None
-   players[user_id]["state"] = STATE_WAR_SEND_SQUAD_POINT
-   save_data()
-   if action == "send":
-    msg = f"🗺️ Локация: {text}\nВведите точку и количество сквадов (например: Б1 5):"
-   else:
-    msg = f"🗺️ Локация: {text}\nВведите точку и количество сквадов для вывода (например: Б1 3):"
-   send_war_map(user_id, text, msg, create_back_only_keyboard())
-   return
-  return
- if state == STATE_WAR_SEND_SQUAD_POINT:
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_WAR_SEND_SQUAD_LOCATION
-   save_data()
-        await send_message(user_id, "🗺️ Выберите локацию:", create_war_send_location_keyboard(user_id))
-   return
-  text_lower = text.lower()
-  if text_lower.startswith("инфо "):
-   info_parts = text_lower[5:].strip().split()
-   if len(info_parts) < 2:
-        await send_message(user_id, "❌ Формат: инфо [локация] [точка]\nПример: инфо кордон б1\nСокращения: тд = Тёмная долина", create_back_only_keyboard())
-    return
-   info_point = info_parts[-1].upper()
-   info_loc_input = " ".join(info_parts[:-1])
-   location_map = {"кордон": "Кордон", "свалка": "Свалка", "тёмная долина": "Тёмная долина", "темная долина": "Тёмная долина", "тд": "Тёмная долина", "поляна": "Поляна"}
-   info_location = location_map.get(info_loc_input)
-   if not info_location:
-        await send_message(user_id, "❌ Неизвестная локация.\nДоступно: Кордон, Свалка, тд, Поляна", create_back_only_keyboard())
-    return
-   if not is_valid_point(info_location, info_point):
-        await send_message(user_id, f"❌ Точка {info_point} не существует на локации {info_location}.", create_back_only_keyboard())
-    return
-   owner = get_territory_owner(info_location, info_point)
-   player_faction = players[user_id]["faction"]
-   if owner != player_faction:
-        await send_message(user_id, "❌ Эта территория не принадлежит вашей группировке.", create_back_only_keyboard())
-    return
-   squads_on_point = get_territory_squads(info_location, info_point)
-   ptype = POINT_TYPES.get(info_point, "Территория")
-   min_req = MIN_SQUADS_FOR_POINT.get(ptype, 1)
-        await send_message(user_id, f"📍 {info_location} {info_point}\n👥 Сквадов: {squads_on_point}\n🏷️ Тип: {ptype}\n📋 Минимум для удержания: {min_req}", create_back_only_keyboard())
-   return
-  parts = text.upper().split()
-  if len(parts) != 2:
-        await send_message(user_id, "❌ Неверный формат. Пример: Б1 5\n\n💡 Чтобы узнать сквады на своей точке:\nинфо [локация] [точка]\nПример: инфо кордон б1", create_back_only_keyboard())
-   return
-  point = parts[0]
-  try:
-   squad_count = int(parts[1])
-  except:
-        await send_message(user_id, "❌ Количество должно быть числом.", create_back_only_keyboard())
-   return
-  if squad_count <= 0:
-        await send_message(user_id, "❌ Количество сквадов должно быть больше 0.", create_back_only_keyboard())
-   return
-  p = players[user_id]
-  location = p.get("pending_squad_location")
-  action = p.get("squad_action", "send")
-  border_points = p.get("pending_border_points")
-  if not is_valid_point(location, point):
-        await send_message(user_id, "❌ Такой точки не существует.", create_back_only_keyboard())
-   return
-  if border_points is not None and point not in border_points:
-   border_info = ", ".join(border_points)
-        await send_message(user_id, f"❌ С вашей позиции можно отправить сквады только на граничащие точки: {border_info}", create_back_only_keyboard())
-   return
-  if action == "withdraw":
-   owner = get_territory_owner(location, point)
-   if owner != p["faction"]:
-        await send_message(user_id, "❌ Вы можете выводить сквады только со своих территорий.", create_back_only_keyboard())
-    return
-   current_squads = get_territory_squads(location, point)
-   ptype = POINT_TYPES.get(point, "Территория")
-   min_squads = MIN_SQUADS_FOR_POINT.get(ptype, 1)
-   available = current_squads - min_squads
-   if squad_count > available:
-        await send_message(user_id, f"❌ Можно вывести максимум {available} сквадов (на точке {current_squads}, минимум {min_squads}).", create_back_only_keyboard())
-    return
-   territory_control[location][point]["squads"] -= squad_count
-   p["squads"] = p.get("squads", 0) + squad_count
-   players[user_id]["state"] = STATE_WAR_MANAGE_SQUADS
-   players[user_id]["pending_border_points"] = None
-   save_data()
-        await send_message(user_id, f"✅ Выведено {squad_count} сквадов с {location} {point}. У вас теперь {p['squads']} сквадов.", create_war_manage_keyboard())
-   return
-  if p.get("squads", 0) < squad_count:
-        await send_message(user_id, f"❌ У вас только {p.get('squads', 0)} сквадов.", create_back_only_keyboard())
-   return
-  owner = get_territory_owner(location, point)
-  if owner is None or owner == p["faction"]:
-   result = process_attack(user_id, location, point, squad_count, False)
-   players[user_id]["state"] = STATE_WAR_MANAGE_SQUADS
-   players[user_id]["pending_border_points"] = None
-   save_data()
-        await send_message(user_id, result, create_war_manage_keyboard())
-   return
-  else:
-   players[user_id]["pending_attack_point"] = point
-   players[user_id]["pending_attack_squads"] = squad_count
-   players[user_id]["state"] = STATE_WAR_ATTACK_CONFIRM
-   save_data()
-   enemy_squads = get_territory_squads(location, point)
-        await send_message(user_id, f"⚔️ Напасть на территорию занимаемую {owner}?", create_attack_confirm_keyboard())
-   return
-  return
- if state == STATE_WAR_ATTACK_CONFIRM:
-  p = players[user_id]
-  location = p.get("pending_squad_location")
-  point = p.get("pending_attack_point")
-  squad_count = p.get("pending_attack_squads", 0)
-  if text == "❌ Нет":
-   players[user_id]["state"] = STATE_WAR_MANAGE_SQUADS
-   save_data()
-   msg = f"👨‍👨‍👦‍👦 Ваши сквады: {p.get('squads', 0)}\nКак собираетесь ими распорядиться?\n\n💡 инфо [локация] [точка] — узнать сквады"
-        await send_message(user_id, msg, create_war_manage_keyboard())
-   return
-  elif text == "✅ Да":
-   result = process_attack(user_id, location, point, squad_count, False)
-   players[user_id]["state"] = STATE_WAR_MANAGE_SQUADS
-   save_data()
-        await send_message(user_id, result, create_war_manage_keyboard())
-   return
-  elif text == "⚔️ Напасть со сквадами":
-   result = process_attack(user_id, location, point, squad_count, True)
-   players[user_id]["state"] = STATE_WAR_MANAGE_SQUADS
-   save_data()
-        await send_message(user_id, result, create_war_manage_keyboard())
-   return
-  return
- if state == STATE_WAR_SHARED_SQUADS:
-  p = players[user_id]
-  faction = p["faction"]
-  if text == "🔚 Назад":
-   players[user_id]["state"] = STATE_WAR_MANAGE_SQUADS
-   save_data()
-   msg = f"👨‍👨‍👦‍👦 Ваши сквады: {p.get('squads', 0)}\nКак собираетесь ими распорядиться?\n\n💡 инфо [локация] [точка] — узнать сквады"
-        await send_message(user_id, msg, create_war_manage_keyboard())
-   return
-  elif text == "📥 Пополнить":
-        await send_message(user_id, "Введите количество сквадов для пополнения общих:", create_back_only_keyboard())
-   players[user_id]["shared_squad_action"] = "deposit"
-   return
-  elif text == "📤 Вывести":
-        await send_message(user_id, "Введите количество сквадов для вывода из общих:", create_back_only_keyboard())
-   players[user_id]["shared_squad_action"] = "withdraw"
-   return
-  action = p.get("shared_squad_action")
-  if action:
-   try:
-    count = int(text)
-   except:
-        await send_message(user_id, "❌ Введите число.", create_shared_squads_keyboard())
-    return
-   if action == "deposit":
-    if p.get("squads", 0) < count:
-        await send_message(user_id, f"❌ У вас только {p.get('squads', 0)} сквадов.", create_shared_squads_keyboard())
-     return
-    p["squads"] -= count
-    faction_shared_squads[faction] = faction_shared_squads.get(faction, 0) + count
-    save_data()
-        await send_message(user_id, f"✅ Пополнено {count} сквадов в общие. Общие сквады: {faction_shared_squads[faction]}", create_shared_squads_keyboard())
-   elif action == "withdraw":
-    if faction_shared_squads.get(faction, 0) < count:
-        await send_message(user_id, f"❌ В общих только {faction_shared_squads.get(faction, 0)} сквадов.", create_shared_squads_keyboard())
-     return
-    faction_shared_squads[faction] -= count
-    p["squads"] = p.get("squads", 0) + count
-    save_data()
-        await send_message(user_id, f"✅ Выведено {count} сквадов. Ваши сквады: {p['squads']}", create_shared_squads_keyboard())
-   p["shared_squad_action"] = None
-   return
-  return
- if state == STATE_HUNTING:
-  if text == "🏃 Побег":
-   handle_hunting_escape(user_id)
-   return
-  elif text.startswith("🎯 "):
-   try:
-    shot_num = int(text.split()[-1])
-    if 1 <= shot_num <= 9:
-     players[user_id]["state"] = STATE_HUNTING_SHOOTING
-     players[user_id]["shot_button"] = shot_num
-     save_data()
-     handle_shooting(user_id)
-     return
-   except ValueError:
-    pass
-        await send_message(user_id, "Выберите цель или сбегите.", create_hunting_keyboard())
-  else:
-        await send_message(user_id, "Выберите цель или сбегите.", create_hunting_keyboard())
-  return
- if state == STATE_HUNTING_SHOOTING:
-  players[user_id]["state"] = STATE_HUNTING
-  save_data()
-  if players[user_id].get("mutant_hp", 0) > 0:
-        await send_message(user_id, "Продолжайте охоту:", create_hunting_keyboard())
-   return
- if state == "zombie_control":
-  if text == "⚔️ Агрессивный захват":
-   zombie_bot["mode"] = "aggressive"
-   save_data()
-        await send_message(user_id, "✅ Режим: Агрессивный захват\nБот будет максимально активно атаковать.", create_zombie_control_keyboard())
-   return
-  elif text == "⚖️ Обычный режим":
-   zombie_bot["mode"] = "normal"
-   save_data()
-        await send_message(user_id, "✅ Режим: Обычный\nБот будет сбалансированно развиваться.", create_zombie_control_keyboard())
-   return
-  elif text == "📦 Накопление ресурсов":
-   zombie_bot["mode"] = "loot"
-   save_data()
-        await send_message(user_id, "✅ Режим: Накопление ресурсов\nБот будет лутать и копить, не атакуя.", create_zombie_control_keyboard())
-   return
-  elif text == "🎯 Установить приоритет":
-        await send_message(user_id, "Введите цель в формате: [локация] [точка]\nПример: Кордон Б1", create_back_only_keyboard())
-   players[user_id]["state"] = "zombie_set_priority"
-   save_data()
-   return
-  elif text == "❌ Сбросить приоритет":
-   zombie_bot["priority_target"] = None
-   save_data()
-        await send_message(user_id, "✅ Приоритетная цель сброшена.", create_zombie_control_keyboard())
-   return
-  elif text == "🔚 Назад":
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-        await send_message(user_id, MAIN_MENU_TEXT, create_main_menu_keyboard(user_id))
-   return
-  return
- if state == "zombie_set_priority":
-  if text == "🔚 Назад":
-   players[user_id]["state"] = "zombie_control"
-   save_data()
-        await send_message(user_id, "🧟 Управление зомбированными:", create_zombie_control_keyboard())
-   return
-  parts = text.split()
-  if len(parts) < 2:
-        await send_message(user_id, "❌ Формат: [локация] [точка]\nПример: Кордон Б1", create_back_only_keyboard())
-   return
-  point = parts[-1].upper()
-  loc_input = " ".join(parts[:-1]).lower()
-  location_map = {"кордон": "Кордон", "свалка": "Свалка", "тёмная долина": "Тёмная долина", "темная долина": "Тёмная долина", "тд": "Тёмная долина", "поляна": "Поляна"}
-  location = location_map.get(loc_input)
-  if not location:
-        await send_message(user_id, "❌ Неизвестная локация.", create_back_only_keyboard())
-   return
-  if not is_valid_point(location, point):
-        await send_message(user_id, f"❌ Точка {point} не существует.", create_back_only_keyboard())
-   return
-  zombie_bot["priority_target"] = (location, point)
-  players[user_id]["state"] = "zombie_control"
-  save_data()
-        await send_message(user_id, f"✅ Приоритетная цель: {location} {point}", create_zombie_control_keyboard())
-  return
- if state == STATE_WAITING_QUOTE_PHOTO:
-  p = players[user_id]
-  quote_data = p.get("pending_quote")
-  if not quote_data:
-   players[user_id]["state"] = STATE_IN_MENU
-   save_data()
-        await send_message(user_id, "❌ Данные цитаты потеряны.", create_main_menu_keyboard(user_id))
-   return
-  if text.lower() == "нет":
-   background_img = None
-  else:
-   await send_message(user_id, "❌ Отправьте фото для фона или напишите «нет» для чёрного фона.", None)
-   return
-  quote_text = quote_data.get("text", "")
-  quote_user_id = quote_data.get("user_id")
-  quote_date = quote_data.get("date", "")
-  try:
-   user_info = vk_session.method("users.get", {"user_ids": quote_user_id, "fields": "first_name"})[0]
-   user_name = user_info.get("first_name", "Аноним")
-  except:
-   user_name = "Аноним"
-  avatar_img = get_user_avatar(quote_user_id)
-  img_buffer = generate_quote_image(quote_text, user_name, avatar_img, quote_date, background_img)
-  try:
-   upload_url = vk_session.method("photos.getMessagesUploadServer")["upload_url"]
-   response = vk_session.http.post(upload_url, files={"photo": ("quote.png", img_buffer, "image/png")})
-   result = response.json()
-   photo_data = vk_session.method("photos.saveMessagesPhoto", {"photo": result["photo"], "server": result["server"], "hash": result["hash"]})[0]
-   await api.messages.send( {user_id=user_id, "attachment": f"photo{photo_data['owner_id']}_{photo_data['id']}", random_id=random.randint(1, 2**31), "message": "🖼 Ваша цитата готова!"})
-  except Exception as e:
-   logger.error(f"Ошибка отправки цитаты: {e}")
-   await send_message(user_id, "❌ Ошибка генерации цитаты.", None)
-  players[user_id]["state"] = STATE_IN_MENU
-  players[user_id].pop("pending_quote", None)
-  save_data()
-  return
-async def handle_chat_message(event: SimpleBotEvent):
-    message = event.obj.message
-    user_id = message['from_id']
-    if user_id in banned_users:
-        return
-    text = message.get('text', '').strip()
-    peer_id = message['peer_id']
-    if not text:
-        return
+        await send_message(user_id, "❌ Не удалось сохранить фото.")
+async def process_quote_request(user_id, quote_text, quote_user_id, quote_timestamp, peer_id):
+    if not quote_text or quote_user_id <= 0:
+        await send_message(user_id, "❌ Сообщение пустое или от сообщества.", peer_id=peer_id)
+        return False
+    moscow_time = quote_timestamp + 3 * 3600
+    quote_date = time.strftime('%d.%m.%Y %H:%M', time.gmtime(moscow_time))
     if user_id not in players:
-        return
-    reply_user_id = None
-    if 'reply_message' in message and message['reply_message']:
-        reply_user_id = message['reply_message'].get('from_id')
-        if reply_user_id and reply_user_id not in players:
-            reply_user_id = None
-    text_lower = text.lower()
-    words = text.split()
-    words_lower = text_lower.split()
-    if not words:
-        return
-    if words_lower[0] == "перевести":
-        if reply_user_id and len(words) >= 2:
-            try:
-                amount = int(words[1])
-            except:
-        await send_message(user_id, "❌ Формат: перевести [сумма] (ответом на сообщение)", None, vk_session, peer_id)
-                return
-            target_uid = reply_user_id
-        elif len(words) >= 3:
-            try:
-                amount = int(words[1])
-                target_str = " ".join(words[2:])
-            except:
-        await send_message(user_id, "❌ Формат: перевести [сумма] [ник]", None, vk_session, peer_id)
-                return
-            target_uid = find_player_by_mention_or_nickname(target_str)
+        players[user_id] = {"state": STATE_WAITING_QUOTE_PHOTO, "pending_quote": {"text": quote_text, "user_id": quote_user_id, "date": quote_date}}
+    else:
+        players[user_id]["state"] = STATE_WAITING_QUOTE_PHOTO
+        players[user_id]["pending_quote"] = {"text": quote_text, "user_id": quote_user_id, "date": quote_date}
+    save_data()
+    await send_message(user_id, "📷 Отправьте фото для фона или напишите «нет» для чёрного фона.\n💡 Заголовок: «нет Цитаты великих» или фото с подписью.", peer_id=peer_id)
+    return True
+async def process_quote_photo(user_id, text, photo_attachment, peer_id):
+    p = players.get(user_id)
+    if not p:
+        return False
+    quote_data = p.get("pending_quote")
+    if not quote_data:
+        return False
+    background_img = None
+    title = None
+    if photo_attachment:
+        sizes = photo_attachment.get('sizes', [])
+        if sizes:
+            best_size = max(sizes, key=lambda x: x.get('width', 0) * x.get('height', 0))
+            photo_url = best_size.get('url')
+            if photo_url:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(photo_url) as resp:
+                            data = await resp.read()
+                    background_img = Image.open(io.BytesIO(data))
+                except:
+                    pass
+        if text:
+            title = text
+    elif text.lower() == "нет":
+        background_img = None
+        title = None
+    elif text.lower().startswith("нет "):
+        background_img = None
+        title = text[4:].strip()
+    else:
+        return False
+    quote_text = quote_data.get("text", "")
+    quote_user_id = quote_data.get("user_id")
+    quote_date = quote_data.get("date", "")
+    try:
+        users = await bot.api.users.get(user_ids=[quote_user_id], fields=["first_name"])
+        user_name = users[0].first_name
+    except:
+        user_name = "Аноним"
+    avatar_img = await get_user_avatar(quote_user_id)
+    img_buffer = generate_quote_image(quote_text, user_name, avatar_img, quote_date, background_img, title)
+    try:
+        await send_photo_message(user_id, img_buffer, "🖼 Ваша цитата готова!", peer_id=peer_id)
+    except Exception as e:
+        logger.error(f"Ошибка отправки цитаты: {e}")
+        await send_message(user_id, "❌ Ошибка генерации цитаты.", peer_id=peer_id)
+    p["state"] = STATE_IN_MENU
+    p.pop("pending_quote", None)
+    save_data()
+    return True
+async def handle_global_commands(user_id, text, reply_user_id=None):
+    text_original = text.strip()
+    text_lower = text_original.lower()
+    words = text_lower.split()
+    words_original = text_original.split()
+    if user_id in banned_users and not is_admin(user_id):
+        return True
+    if text_lower == "инфо":
+        current_keyboard = None
+        state = players[user_id]["state"]
+        if state == STATE_IN_MENU:
+            current_keyboard = create_main_menu_keyboard(user_id)
+        elif state == STATE_IN_CAMP:
+            current_keyboard = create_camp_menu_keyboard()
+        elif state == STATE_IN_BACKPACK:
+            current_keyboard = create_backpack_menu_keyboard()
+        elif state == STATE_TRADER_MAIN:
+            current_keyboard = create_trader_main_keyboard()
+        elif state == STATE_TRADER_BUY_CATEGORY:
+            current_keyboard = create_trader_category_keyboard()
+        elif state == STATE_TRADER_SELL_CATEGORY:
+            current_keyboard = create_trader_sell_category_keyboard()
+        elif state == STATE_TRADER_BUY_EQUIPMENT:
+            current_keyboard = create_equipment_category_keyboard()
+        elif state == STATE_TRADER_SELL_EQUIPMENT_CONFIRM:
+            current_keyboard = create_equipment_sell_keyboard()
+        elif state == STATE_TRADER_REPAIR:
+            current_keyboard = create_repair_keyboard(user_id)
+        elif state == STATE_WAREHOUSE:
+            current_keyboard = create_warehouse_keyboard()
+        await send_message(user_id, format_camp_info(user_id), current_keyboard)
+        return True
+    if text_lower == "*":
+        state = players[user_id]["state"]
+        if state in [STATE_TRANSITION_WAIT, STATE_RESTING]:
+            await send_message(user_id, "Команда * недоступна во время перехода или отдыха.")
+            return True
+        if state == STATE_IN_MENU:
+            await send_message(user_id, MAIN_MENU_TEXT, create_main_menu_keyboard(user_id))
+        elif state == STATE_IN_CAMP:
+            await send_message(user_id, format_camp_info(user_id), create_camp_menu_keyboard())
+        elif state == STATE_IN_BACKPACK:
+            await upload_and_send_inventory(user_id)
+            return True
+        elif state == STATE_WAREHOUSE:
+            await upload_and_send_warehouse_global(user_id)
+            return True
+        elif state == STATE_TRADER_MAIN:
+            await send_message(user_id, "Вы хотите что либо 💲 приобрести или 💱 продать?", create_trader_main_keyboard())
+        elif state == STATE_TRADER_BUY_CATEGORY:
+            await send_message(user_id, "Выберите категорию:", create_trader_category_keyboard())
+        elif state == STATE_TRADER_SELL_CATEGORY:
+            await send_message(user_id, "Выберите категорию:", create_trader_sell_category_keyboard())
+        elif state == STATE_TRADER_BUY_EQUIPMENT:
+            await send_message(user_id, "Выберите тип снаряжения:", create_equipment_category_keyboard())
+        elif state == STATE_TRADER_SELL_EQUIPMENT_CONFIRM:
+            await send_message(user_id, "Выберите категорию снаряжения для продажи:", create_equipment_sell_keyboard())
+        elif state == STATE_TRADER_BUY:
+            await show_buy_provisions_menu(user_id)
+            return True
+        elif state == STATE_TRADER_SELL:
+            await show_sell_provisions_menu(user_id)
+            return True
+        elif state == STATE_TRADER_REPAIR:
+            p = players[user_id]
+            money = p.get("money", 0)
+            repair_text = f"⚙️ Что собираетесь починить? 🧐\n❗ Ремонт на 1 единицу осуществляется за 15р\n💲 Деньги: {money}р"
+            await send_message(user_id, repair_text, create_repair_keyboard(user_id))
+            return True
         else:
-        await send_message(user_id, "❌ Формат: перевести [сумма] [ник] или ответом на сообщение", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "Команда * не поддерживается в этом состоянии.")
+        return True
+    if text_lower == "2604":
+        current_state = players.get(user_id, {}).get("state")
+        if current_state in [STATE_TRANSITION_WAIT, STATE_HUNTING, STATE_HUNTING_SHOOTING]:
+            await send_message(user_id, "❌ Команда 2604 недоступна на данный момент.")
+        elif user_id in players:
+            players[user_id]["state"] = STATE_IN_MENU
+            save_data()
+            await send_message(user_id, "✅ Вы вернулись в главное меню.", create_main_menu_keyboard(user_id))
+        else:
+            await send_message(user_id, "❌ Вы не в игре.")
+        return True
+    if words and words[0] in ["исп", "использовать"] and len(words) >= 2:
+        item_part = " ".join(words[1:])
+        await use_item(user_id, item_part, from_global_command=True)
+        return True
+    if words and words[0] == "перевести" and len(words) >= 3:
+        try:
+            amount = int(words[1])
+            target_str = words[2]
+        except:
+            await send_message(user_id, "❌ Неверный формат. Пример: перевести 100 ник")
+            return True
         if amount <= 0:
-        await send_message(user_id, "❌ Сумма должна быть больше 0.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Сумма должна быть больше 0.")
+            return True
+        target_uid = find_player_by_mention_or_nickname(target_str)
         if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Игрок не найден по нику.")
+            return True
         if target_uid == user_id:
-        await send_message(user_id, "❌ Нельзя перевести себе.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Нельзя перевести деньги самому себе.")
+            return True
         if target_uid in banned_users:
-        await send_message(user_id, "❌ Этот игрок заблокирован.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Этот игрок заблокирован.")
+            return True
         if players[user_id]["money"] < amount:
-        await send_message(user_id, f"❌ Недостаточно денег. У вас {players[user_id]['money']}р.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, f"❌ Недостаточно денег. У вас {players[user_id]['money']}р.")
+            return True
         players[user_id]["money"] -= amount
         players[target_uid]["money"] = players[target_uid].get("money", 0) + amount
         sender_nickname = players[user_id]["nickname"]
         save_data()
-        await send_message(user_id, f"✅ Переведено {amount}р игроку {players[target_uid]['nickname']}.", None, vk_session, peer_id)
-        await send_message(target_uid, f"📥 Вам перевёл(а) {sender_nickname}: {amount}р", None)
-        return
-    if words_lower[0] == "отправить":
-        if reply_user_id and len(words) >= 3:
-            try:
-                amount = int(words[-1])
-                item_name_original = " ".join(words[1:-1])
-            except:
-        await send_message(user_id, "❌ Формат: отправить [предмет] [кол-во] (ответом)", None, vk_session, peer_id)
-                return
-            target_uid = reply_user_id
-        elif len(words) >= 4:
+        await send_message(user_id, f"✅ Переведено {amount}р игроку {players[target_uid]['nickname']}.")
+        await send_message(target_uid, f"📥 Вам перевёл(а) {sender_nickname}: {amount}р")
+        return True
+    if words and words[0] == "отправить":
+        target_uid = None
+        if reply_user_id:
+            if reply_user_id in players:
+                target_uid = reply_user_id
+        if len(words) >= 4 and not target_uid:
             item_parts = []
             amount = None
             target_str = None
-            for i in range(len(words) - 1, 0, -1):
+            for i in range(len(words_original) - 1, 0, -1):
                 if target_str is None:
-                    target_str = words[i]
+                    target_str = words_original[i]
                 elif amount is None:
                     try:
-                        amount = int(words[i])
+                        amount = int(words_original[i])
                     except:
-        await send_message(user_id, "❌ Формат: отправить [предмет] [кол-во] [ник]", None, vk_session, peer_id)
-                        return
+                        await send_message(user_id, "❌ Неверный формат. Пример: отправить хлеб 2 ник")
+                        return True
                 else:
-                    item_parts = words[1:i+1]
+                    item_parts = words_original[1:i+1]
                     break
             if not item_parts or amount is None or target_str is None:
-        await send_message(user_id, "❌ Формат: отправить [предмет] [кол-во] [ник]", None, vk_session, peer_id)
-                return
+                await send_message(user_id, "❌ Неверный формат. Пример: отправить хлеб 2 ник")
+                return True
             item_name_original = " ".join(item_parts)
             target_uid = find_player_by_mention_or_nickname(target_str)
+        elif reply_user_id and len(words) >= 3:
+            try:
+                amount = int(words[-1])
+                item_name_original = " ".join(words_original[1:-1])
+            except:
+                await send_message(user_id, "❌ Неверный формат. Пример: отправить хлеб 2 (ответом на сообщение)")
+                return True
         else:
-        await send_message(user_id, "❌ Формат: отправить [предмет] [кол-во] [ник] или ответом", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Неверный формат. Пример: отправить хлеб 2 ник или ответом на сообщение")
+            return True
         if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Игрок не найден.")
+            return True
         if target_uid == user_id:
-        await send_message(user_id, "❌ Нельзя отправить себе.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Нельзя отправить предмет самому себе.")
+            return True
+        if target_uid in banned_users:
+            await send_message(user_id, "❌ Этот игрок заблокирован.")
+            return True
         found_item = None
         for item in ITEM_EFFECTS.keys():
             if item.lower() == item_name_original.lower():
@@ -6879,25 +4183,149 @@ async def handle_chat_message(event: SimpleBotEvent):
                     found_item = art
                     break
         if not found_item:
-        await send_message(user_id, "❌ Неизвестный предмет.", None, vk_session, peer_id)
-            return
+            for art in DONATION_ARTIFACTS:
+                if art.lower() == item_name_original.lower():
+                    found_item = art
+                    break
+        if not found_item:
+            await send_message(user_id, "❌ Неизвестный предмет.")
+            return True
         backpack = players[user_id]["backpack"]
         current_count = backpack.get(found_item, 0)
         if current_count < amount:
-        await send_message(user_id, f"❌ Недостаточно предметов. Есть: {current_count}.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, f"❌ У вас недостаточно предметов. Есть: {current_count}.")
+            return True
         backpack[found_item] -= amount
         if backpack[found_item] <= 0:
             del backpack[found_item]
         players[target_uid]["backpack"][found_item] = players[target_uid]["backpack"].get(found_item, 0) + amount
         sender_nickname = players[user_id]["nickname"]
         save_data()
-        await send_message(user_id, f"✅ Отправлено {found_item} x{amount} игроку {players[target_uid]['nickname']}.", None, vk_session, peer_id)
-        await send_message(target_uid, f"📥 Вам отправил(а) {sender_nickname}: {found_item} x{amount}", None)
-        return
-    if not is_admin(user_id):
-        return
-    if text_lower == "/бог":
+        await send_message(user_id, f"✅ Отправлено {found_item} x{amount} игроку {players[target_uid]['nickname']}.")
+        await send_message(target_uid, f"📥 Вам отправил(а) {sender_nickname}: {found_item} x{amount}")
+        return True
+    if text_lower.startswith("инфо "):
+        info_parts = text_lower[5:].strip().split()
+        if len(info_parts) < 2:
+            await send_message(user_id, "❌ Формат: инфо [локация] [точка]\nПример: инфо кордон б1\nСокращения: тд = Тёмная долина")
+            return True
+        info_point = info_parts[-1].upper()
+        info_loc_input = " ".join(info_parts[:-1])
+        location_map = {"кордон": "Кордон", "свалка": "Свалка", "тёмная долина": "Тёмная долина", "темная долина": "Тёмная долина", "тд": "Тёмная долина", "поляна": "Поляна"}
+        info_location = location_map.get(info_loc_input)
+        if not info_location:
+            await send_message(user_id, "❌ Неизвестная локация.\nДоступно: Кордон, Свалка, тд, Поляна")
+            return True
+        if not is_valid_point(info_location, info_point):
+            await send_message(user_id, f"❌ Точка {info_point} не существует на локации {info_location}.")
+            return True
+        owner = get_territory_owner(info_location, info_point)
+        player_faction = players[user_id]["faction"]
+        if owner != player_faction:
+            await send_message(user_id, "❌ Эта территория не принадлежит вашей группировке.")
+            return True
+        squads_on_point = get_territory_squads(info_location, info_point)
+        ptype = POINT_TYPES.get(info_point, "Территория")
+        min_req = MIN_SQUADS_FOR_POINT.get(ptype, 1)
+        await send_message(user_id, f"📍 {info_location} {info_point}\n👥 Сквадов: {squads_on_point}\n🏷️ Тип: {ptype}\n📋 Минимум для удержания: {min_req}")
+        return True
+    if text_lower.startswith("повесить "):
+        art_name = text_lower[9:].strip()
+        found_art = None
+        for art in ALL_ARTIFACTS:
+            if art.lower() == art_name.lower():
+                found_art = art
+                break
+        if not found_art:
+            await send_message(user_id, "❌ Неизвестный артефакт.")
+            return True
+        if players[user_id]["backpack"].get(found_art, 0) <= 0:
+            await send_message(user_id, "❌ У вас нет этого артефакта.")
+            return True
+        belt = players[user_id].get("belt", [None, None, None])
+        for i in range(3):
+            if belt[i] is None:
+                belt[i] = found_art
+                players[user_id]["belt"] = belt
+                players[user_id]["backpack"][found_art] -= 1
+                if players[user_id]["backpack"][found_art] <= 0:
+                    del players[user_id]["backpack"][found_art]
+                save_data()
+                await send_message(user_id, f"✅ {found_art} повешен на пояс {i + 1}.")
+                return True
+        await send_message(user_id, "❌ Все пояса заняты.")
+        return True
+    if text_lower.startswith("снять "):
+        art_name = text_lower[6:].strip()
+        belt = players[user_id].get("belt", [None, None, None])
+        for i in range(3):
+            if belt[i] and belt[i].lower() == art_name.lower():
+                art = belt[i]
+                belt[i] = None
+                players[user_id]["belt"] = belt
+                players[user_id]["backpack"][art] = players[user_id]["backpack"].get(art, 0) + 1
+                save_data()
+                await send_message(user_id, f"✅ {art} снят с пояса {i + 1}.")
+                return True
+        await send_message(user_id, "❌ Этот артефакт не на поясе.")
+        return True
+    if text_lower == "информация":
+        await send_message(user_id, GAME_INFO_TEXT)
+        return True
+    if text_lower == "/инв" or text_lower == "инв":
+        p = players[user_id]
+        backpack = p.get("backpack", {})
+        money = p.get("money", 0)
+        if not backpack or all(v <= 0 for v in backpack.values()):
+            items_str = "Пусто"
+        else:
+            items_list = []
+            for item, count in backpack.items():
+                if count > 0:
+                    items_list.append(f"• {item}: {count}")
+            items_str = "\n".join(items_list)
+        msg = f"🎒 Инвентарь игрока {p.get('nickname', 'Неизвестный')}:\n\n{items_str}\n\n💲 Деньги: {money}р"
+        await send_message(user_id, msg)
+        return True
+    if text_lower == "/сон" or text_lower == "сон":
+        p = players[user_id]
+        if p.get("state") != STATE_RESTING:
+            await send_message(user_id, "❌ Вы не отдыхаете.")
+            return True
+        start_time = p.get("rest_start_time")
+        if not start_time:
+            await send_message(user_id, "❌ Ошибка: время начала отдыха не найдено.")
+            return True
+        current_time = time.time()
+        elapsed = current_time - start_time
+        initial = p.get("initial_stamina", p["stamina"])
+        belt_bonus = apply_belt_effects_on_rest(user_id)
+        donation_bonus = 1 if has_active_donation(user_id) else 0
+        total_bonus = 1 + belt_bonus + donation_bonus
+        elapsed_intervals = int(elapsed // 360)
+        current_stamina = min(10, initial + elapsed_intervals * total_bonus)
+        seconds_in_current_interval = elapsed % 360
+        seconds_to_next = int(360 - seconds_in_current_interval)
+        next_mins = seconds_to_next // 60
+        next_secs = seconds_to_next % 60
+        if current_stamina >= 10:
+            total_remaining = 0
+        else:
+            stamina_after_next = min(10, current_stamina + total_bonus)
+            if stamina_after_next >= 10:
+                total_remaining = seconds_to_next
+            else:
+                remaining_after_next = 10 - stamina_after_next
+                intervals_after_next = int(remaining_after_next / total_bonus)
+                if remaining_after_next % total_bonus > 0:
+                    intervals_after_next += 1
+                total_remaining = seconds_to_next + intervals_after_next * 360
+        total_mins = total_remaining // 60
+        total_secs = total_remaining % 60
+        msg = f"😴 Статус отдыха:\n⚡ Текущая выносливость: {current_stamina}/10\n🔋 Восстановление за 6 мин: +{total_bonus}\n⏱️ До следующего восстановления: {next_mins} мин {next_secs} сек\n⏱️ До полного восстановления: {total_mins} мин {total_secs} сек"
+        await send_message(user_id, msg)
+        return True
+    if text_lower == "/бог" and is_admin(user_id):
         p = players[user_id]
         p["money"] += 1000
         p["health"] = 10
@@ -6905,77 +4333,59 @@ async def handle_chat_message(event: SimpleBotEvent):
         p["hunger"] = 0
         p["stamina"] = 10
         save_data()
-        await send_message(user_id, "✅ Вы получили 1000р и восстановили все характеристики.", None, vk_session, peer_id)
-        return
-    if text_lower.startswith("/лидер "):
-        if reply_user_id and len(words) == 1:
-            target_uid = reply_user_id
-        else:
-            parts = text.split(maxsplit=1)
-            if len(parts) < 2:
-        await send_message(user_id, "❌ Укажите ник или ответьте на сообщение.", None, vk_session, peer_id)
-                return
-            target_uid = find_player_by_mention_or_nickname(parts[1].strip())
+        await send_message(user_id, "✅ Вы получили 1000р и восстановили все характеристики.")
+        return True
+    if text_lower.startswith("/лидер ") and is_admin(user_id):
+        parts = text_original.split(maxsplit=1)
+        if len(parts) < 2:
+            await send_message(user_id, "❌ Укажите ник игрока.")
+            return True
+        target_nick = parts[1].strip()
+        target_uid = find_player_by_mention_or_nickname(target_nick)
         if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Игрок не найден.")
+            return True
         target_faction = players[target_uid]["faction"]
         set_faction_leader(target_faction, target_uid)
-        await send_message(user_id, f"✅ {players[target_uid]['nickname']} назначен лидером {target_faction}.", None, vk_session, peer_id)
-        await send_message(target_uid, f"👑 Вы назначены лидером группировки {target_faction}!", None)
-        return
-    if text_lower.startswith("/лидер") and reply_user_id:
-        target_uid = reply_user_id
-        target_faction = players[target_uid]["faction"]
-        set_faction_leader(target_faction, target_uid)
-        await send_message(user_id, f"✅ {players[target_uid]['nickname']} назначен лидером {target_faction}.", None, vk_session, peer_id)
-        await send_message(target_uid, f"👑 Вы назначены лидером группировки {target_faction}!", None)
-        return
-    if text_lower.startswith("/гив "):
-        parts = text.split()
-        if reply_user_id and len(parts) >= 3:
+        await send_message(user_id, f"✅ {target_nick} назначен лидером группировки {target_faction}.")
+        await send_message(target_uid, f"👑 Вы назначены лидером группировки {target_faction}!")
+        return True
+    if text_lower.startswith("/гив ") and is_admin(user_id):
+        parts = text_original.split()
+        if len(parts) < 3:
+            await send_message(user_id, "❌ Формат: /гив [предмет] [кол-во] [ник]")
+            return True
+        target_uid = None
+        count = None
+        item_end_index = len(parts)
+        for i in range(len(parts) - 1, 1, -1):
+            potential_nick = " ".join(parts[i:])
+            found_uid = find_player_by_mention_or_nickname(potential_nick)
+            if found_uid:
+                target_uid = found_uid
+                try:
+                    count = int(parts[i - 1])
+                    item_end_index = i - 1
+                    break
+                except:
+                    continue
+        if target_uid is None:
             try:
                 count = int(parts[-1])
-                item_name = " ".join(parts[1:-1]).lower()
-                target_uid = reply_user_id
+                item_end_index = len(parts) - 1
+                target_uid = user_id
             except:
-        await send_message(user_id, "❌ Формат: /гив [предмет] [кол-во] (ответом)", None, vk_session, peer_id)
-                return
-        elif len(parts) >= 3:
-            target_uid = None
-            count = None
-            item_end_index = len(parts)
-            for i in range(len(parts) - 1, 1, -1):
-                potential_nick = " ".join(parts[i:])
-                found_uid = find_player_by_mention_or_nickname(potential_nick)
-                if found_uid:
-                    target_uid = found_uid
-                    try:
-                        count = int(parts[i - 1])
-                        item_end_index = i - 1
-                        break
-                    except:
-                        continue
-            if target_uid is None:
-                try:
-                    count = int(parts[-1])
-                    item_end_index = len(parts) - 1
-                    target_uid = user_id
-                except:
-        await send_message(user_id, "❌ Неверный формат.", None, vk_session, peer_id)
-                    return
-            item_name = " ".join(parts[1:item_end_index]).lower()
-        else:
-        await send_message(user_id, "❌ Формат: /гив [предмет] [кол-во] [ник]", None, vk_session, peer_id)
-            return
+                await send_message(user_id, "❌ Неверный формат. Укажите количество.")
+                return True
         if count is None or count <= 0:
-        await send_message(user_id, "❌ Количество должно быть положительным.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Количество должно быть положительным числом.")
+            return True
+        item_name = " ".join(parts[1:item_end_index]).lower()
         if item_name == "деньги":
             players[target_uid]["money"] = players[target_uid].get("money", 0) + count
             save_data()
-        await send_message(user_id, f"✅ Выдано {count}р игроку {players[target_uid]['nickname']}.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, f"✅ Выдано {count}р игроку {players[target_uid]['nickname']}.")
+            return True
         found_item = None
         for item in ITEM_EFFECTS.keys():
             if item.lower() == item_name:
@@ -6987,508 +4397,168 @@ async def handle_chat_message(event: SimpleBotEvent):
                     found_item = art
                     break
         if not found_item:
-        await send_message(user_id, "❌ Предмет не найден.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Предмет не найден.")
+            return True
         players[target_uid]["backpack"][found_item] = players[target_uid]["backpack"].get(found_item, 0) + count
         save_data()
-        await send_message(user_id, f"✅ Выдано {found_item} x{count} игроку {players[target_uid]['nickname']}.", None, vk_session, peer_id)
-        return
-    if text_lower.startswith("/дэл "):
-        parts = text.split()
-        if reply_user_id and len(parts) >= 3:
+        await send_message(user_id, f"✅ Выдано {found_item} x{count} игроку {players[target_uid]['nickname']}.")
+        return True
+    if text_lower.startswith("/выброс") and is_admin(user_id):
+        global emission_counter, EMISSION_MAX
+        parts = text_lower.split()
+        if len(parts) >= 2:
             try:
-                count = int(parts[-1])
-                item_name = " ".join(parts[1:-1]).lower()
-                target_uid = reply_user_id
+                new_max = int(parts[1])
+                if new_max < 50 or new_max > 10000:
+                    await send_message(user_id, "❌ Лимит должен быть от 50 до 10000.")
+                    return True
+                EMISSION_MAX = new_max
+                save_data()
+                await send_message(user_id, f"✅ Лимит выброса изменён на {EMISSION_MAX}.")
             except:
-        await send_message(user_id, "❌ Формат: /дэл [предмет] [кол-во] (ответом)", None, vk_session, peer_id)
-                return
-        elif len(parts) >= 3:
-            target_uid = None
-            count = None
-            item_end_index = len(parts)
-            for i in range(len(parts) - 1, 1, -1):
-                potential_nick = " ".join(parts[i:])
-                found_uid = find_player_by_mention_or_nickname(potential_nick)
-                if found_uid:
-                    target_uid = found_uid
-                    try:
-                        count = int(parts[i - 1])
-                        item_end_index = i - 1
-                        break
-                    except:
-                        continue
-            if target_uid is None:
-                try:
-                    count = int(parts[-1])
-                    item_end_index = len(parts) - 1
-                    target_uid = user_id
-                except:
-        await send_message(user_id, "❌ Неверный формат.", None, vk_session, peer_id)
-                    return
-            item_name = " ".join(parts[1:item_end_index]).lower()
+                await send_message(user_id, "❌ Укажите число. Пример: /выброс 600")
+            return True
         else:
-        await send_message(user_id, "❌ Формат: /дэл [предмет] [кол-во] [ник]", None, vk_session, peer_id)
-            return
-        if count is None or count <= 0:
-        await send_message(user_id, "❌ Количество должно быть положительным.", None, vk_session, peer_id)
-            return
-        if item_name == "деньги":
-            players[target_uid]["money"] = max(0, players[target_uid].get("money", 0) - count)
+            emission_counter = EMISSION_MAX - 15
             save_data()
-        await send_message(user_id, f"✅ Удалено {count}р у игрока {players[target_uid]['nickname']}.", None, vk_session, peer_id)
-            return
-        found_item = None
-        for item in ITEM_EFFECTS.keys():
-            if item.lower() == item_name:
-                found_item = item
-                break
-        if not found_item:
-            for art in ALL_ARTIFACTS:
-                if art.lower() == item_name:
-                    found_item = art
-                    break
-        if not found_item:
-        await send_message(user_id, "❌ Предмет не найден.", None, vk_session, peer_id)
-            return
-        current = players[target_uid]["backpack"].get(found_item, 0)
-        players[target_uid]["backpack"][found_item] = max(0, current - count)
-        if players[target_uid]["backpack"][found_item] <= 0:
-            del players[target_uid]["backpack"][found_item]
-        save_data()
-        await send_message(user_id, f"✅ Удалено {found_item} x{count} у игрока {players[target_uid]['nickname']}.", None, vk_session, peer_id)
-        return
-    if text_lower.startswith("/сет"):
-        if reply_user_id and len(words) == 1:
-            target_uid = reply_user_id
-        elif len(words) >= 2:
-            target_uid = find_player_by_mention_or_nickname(" ".join(words[1:]))
-        else:
-        await send_message(user_id, "❌ Укажите ник или ответьте на сообщение.", None, vk_session, peer_id)
-            return
-        if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-            return
-        all_items = list(ITEM_EFFECTS.keys()) + ALL_ARTIFACTS
-        for item in all_items:
-            players[target_uid]["backpack"][item] = players[target_uid]["backpack"].get(item, 0) + 1
-        save_data()
-        await send_message(user_id, f"✅ Игроку {players[target_uid]['nickname']} выданы все предметы.", None, vk_session, peer_id)
-        return
-    if text_lower == "/выброс":
-        global emission_counter
-        emission_counter = 284
-        save_data()
-        await send_message(user_id, "✅ Шкала выброса установлена на 284.", None, vk_session, peer_id)
-        return
-    if text_lower.startswith("/донат "):
-        parts = text.split()
-        if len(parts) < 3:
-        await send_message(user_id, "❌ Формат: /донат [день/неделя/месяц] [пончик/стейк] [ник]", None, vk_session, peer_id)
-            return
-        duration_str = parts[1].lower()
-        if duration_str not in DONATION_DURATIONS:
-        await send_message(user_id, "❌ Длительность: день, неделя, месяц", None, vk_session, peer_id)
-            return
-        artifact_input = parts[2].lower()
-        artifact = None
-        for art in DONATION_ARTIFACTS:
-            if art.lower() == artifact_input:
-                artifact = art
-                break
-        if not artifact:
-        await send_message(user_id, "❌ Артефакт: Пончик, Стейк", None, vk_session, peer_id)
-            return
-        if reply_user_id and len(parts) == 3:
-            target_uid = reply_user_id
-        elif len(parts) >= 4:
-            target_uid = find_player_by_mention_or_nickname(parts[3].strip())
-        else:
-            target_uid = user_id
-        if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-            return
-        duration = DONATION_DURATIONS[duration_str]
-        p = players[target_uid]
-        p["donation_end_time"] = time.time() + duration
-        p["donation_artifact"] = artifact
-        p["backpack"][artifact] = p["backpack"].get(artifact, 0) + 1
-        save_data()
-        end_time_str = time.strftime('%d.%m.%Y %H:%M', time.localtime(p["donation_end_time"]))
-        await send_message(user_id, f"✅ Донат активирован игроку {players[target_uid]['nickname']} на {duration_str}!\n🎁 {artifact}\n⏰ До: {end_time_str}", None, vk_session, peer_id)
-        if target_uid != user_id:
-            await send_message(target_uid, f"🎁 Донат на {duration_str}!\n🌕 {artifact}\n⏰ До: {end_time_str}", None)
-        return
-    if text_lower == "/команды":
-        faction_info = "👥 ГРУППИРОВКИ:\n"
-        for faction in ["🛡️ Долг", "☦️ Грех", "☢️ Одиночки"]:
-            current = len(factions.get(faction, []))
-            limit = MAX_FACTION_SIZES.get(faction, 5)
-            faction_info += f"{faction}: {current}/{limit}\n"
-        admin_help = f"📋 АДМИН КОМАНДЫ:\n\n{faction_info}\n/бог\n/лидер [ник]\n/сет [ник]\n/гив [предмет] [кол-во] [ник]\n/дэл [предмет] [кол-во] [ник]\n/выброс\n/донат [день/неделя/месяц] [артефакт] [ник]\n/лимит [гп] [число]\n/сменитьгп [ник] [гп]\n/телепорт [ник] [локация] [точка]\n/ник [старый] [новый]\n/бан [ник] [причина]\n/разбан [ник]\n/skip_cd\n\n💡 Можно отвечать на сообщение вместо ника"
-        await send_message(user_id, admin_help, None, vk_session, peer_id)
-        return
-    if text_lower.startswith("/лимит "):
-        parts = text.split()
-        if len(parts) < 3:
-        await send_message(user_id, "❌ Формат: /лимит [группировка] [число]", None, vk_session, peer_id)
-            return
-        faction_input = parts[1].lower()
+            await send_message(user_id, f"✅ Шкала выброса установлена на {emission_counter}/{EMISSION_MAX}.")
+            return True
+    if text_lower == "/зомби" and is_admin(user_id):
+        if not LAST_STAND_MODE:
+            await send_message(user_id, "❌ Режим Последний Рубеж не активен.")
+            return True
+        await send_message(user_id, get_zombie_status())
+        return True
+    if text_lower == "/последний_рубеж" and user_id == 353430025:
+        init_last_stand_mode()
+        for uid in players:
+            if uid in banned_users:
+                continue
+            faction = players[uid].get("faction")
+            if faction and faction != ZOMBIE_FACTION:
+                await send_message(uid, "🧟 РЕЖИМ ПОСЛЕДНИЙ РУБЕЖ АКТИВИРОВАН!\n\n⚠️ Все группировки перемещены на Кордон!\n🧟 Зомбированные захватили Свалку, Поляну и Тёмную долину!\n\n⚔️ Объединитесь для выживания!")
         try:
-            new_limit = int(parts[2])
+            await bot.api.messages.send(peer_id=GAME_CHAT_ID, message="🧟 РЕЖИМ ПОСЛЕДНИЙ РУБЕЖ АКТИВИРОВАН!\n\nЗомбированные атакуют Зону!", random_id=0)
         except:
-        await send_message(user_id, "❌ Лимит должен быть числом.", None, vk_session, peer_id)
-            return
-        if new_limit < 1 or new_limit > 50:
-        await send_message(user_id, "❌ Лимит от 1 до 50.", None, vk_session, peer_id)
-            return
-        faction_map = {"долг": "🛡️ Долг", "грех": "☦️ Грех", "одиночки": "☢️ Одиночки"}
-        if faction_input not in faction_map:
-        await send_message(user_id, "❌ ГП: долг, грех, одиночки", None, vk_session, peer_id)
-            return
-        faction_name = faction_map[faction_input]
-        MAX_FACTION_SIZES[faction_name] = new_limit
-        save_data()
-        await send_message(user_id, f"✅ Лимит {faction_name} → {new_limit}.", None, vk_session, peer_id)
-        return
-    if text_lower.startswith("/сменитьгп"):
-        parts = text.split()
-        if reply_user_id and reply_user_id in players and len(parts) == 2:
-            target_uid = reply_user_id
-            faction_input = parts[1].lower()
-        elif len(parts) >= 3:
-            target_nick = " ".join(parts[1:-1])
-            faction_input = parts[-1].lower()
-            target_uid = find_player_by_mention_or_nickname(target_nick)
-        else:
-        await send_message(user_id, "❌ Формат: /сменитьгп [ник] [гп] или ответом: /сменитьгп [гп]", None, vk_session, peer_id)
-            return
+            pass
+        await send_message(user_id, "✅ Режим Последний Рубеж активирован!")
+        return True
+    if text_lower == "/последний_рубеж2" and user_id == 353430025:
+        init_last_stand_mode_v2()
+        for uid in players:
+            if uid in banned_users:
+                continue
+            faction = players[uid].get("faction")
+            if faction and faction != ZOMBIE_FACTION:
+                await send_message(uid, "🧟 РЕЖИМ ПОСЛЕДНИЙ РУБЕЖ v2 АКТИВИРОВАН!")
+        await send_message(user_id, "✅ Режим Последний Рубеж v2 активирован!")
+        return True
+    if text_lower.startswith("/бан ") and is_admin(user_id):
+        content = text_original[5:].strip()
+        if not content:
+            await send_message(user_id, "❌ Укажите ник игрока.")
+            return True
+        parts = content.split(maxsplit=1)
+        target_nick = parts[0]
+        reason = parts[1] if len(parts) > 1 else "Причина не указана"
+        target_uid = find_player_by_mention_or_nickname(target_nick)
         if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-            return
-        faction_map = {"долг": "🛡️ Долг", "грех": "☦️ Грех", "одиночки": "☢️ Одиночки", "зомби": ZOMBIE_FACTION, "зомбированные": ZOMBIE_FACTION}
-        if faction_input not in faction_map:
-        await send_message(user_id, "❌ ГП: долг, грех, одиночки, зомби", None, vk_session, peer_id)
-            return
-        new_faction = faction_map[faction_input]
-        old_faction = players[target_uid].get("faction")
-        if old_faction and target_uid in factions.get(old_faction, []):
-            factions[old_faction].remove(target_uid)
-        players[target_uid]["faction"] = new_faction
-        if new_faction not in factions:
-            factions[new_faction] = []
-        if target_uid not in factions[new_faction]:
-            factions[new_faction].append(target_uid)
+            await send_message(user_id, "❌ Игрок не найден.")
+            return True
+        if target_uid == user_id:
+            await send_message(user_id, "❌ Нельзя забанить себя.")
+            return True
+        if target_uid == 353430025:
+            await send_message(user_id, "❌ Нельзя забанить разработчика.")
+            return True
+        banned_users[target_uid] = reason
         save_data()
-        await send_message(user_id, f"✅ {players[target_uid]['nickname']} → {new_faction}.", None, vk_session, peer_id)
-        await send_message(target_uid, f"⚠️ Вас перевели в {new_faction}!", None)
-        return
-    if text_lower.startswith("/телепорт "):
-        parts = text.split()
-        if reply_user_id and len(parts) >= 3:
-            target_uid = reply_user_id
-            point = parts[-1].upper()
-            location_input = " ".join(parts[1:-1]).lower()
-        elif len(parts) >= 4:
-            target_uid = find_player_by_mention_or_nickname(parts[1])
-            point = parts[-1].upper()
-            location_input = " ".join(parts[2:-1]).lower()
-        else:
-        await send_message(user_id, "❌ Формат: /телепорт [ник] [локация] [точка]", None, vk_session, peer_id)
-            return
+        await send_message(user_id, f"✅ Игрок {players[target_uid]['nickname']} забанен.\n📝 Причина: {reason}")
+        await send_message(target_uid, f"🚫 Вы были заблокированы в игре.\n📝 Причина: {reason}")
+        return True
+    if text_lower.startswith("/разбан ") and is_admin(user_id):
+        target_nick = text_original[8:].strip()
+        if not target_nick:
+            await send_message(user_id, "❌ Укажите ник игрока.")
+            return True
+        target_uid = find_player_by_mention_or_nickname(target_nick)
         if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Игрок не найден.")
+            return True
+        if target_uid not in banned_users:
+            await send_message(user_id, "❌ Игрок не забанен.")
+            return True
+        del banned_users[target_uid]
+        save_data()
+        await send_message(user_id, f"✅ Игрок {players[target_uid]['nickname']} разбанен.")
+        await send_message(target_uid, "✅ Вы были разблокированы в игре.")
+        return True
+    if text_lower.startswith("/телепорт ") and is_admin(user_id):
+        parts = text_original.split()
+        if len(parts) < 4:
+            await send_message(user_id, "❌ Формат: /телепорт [ник] [локация] [точка]")
+            return True
+        target_nick = parts[1]
+        point = parts[-1].upper()
+        location_parts = parts[2:-1]
+        location_input = " ".join(location_parts).lower()
+        target_uid = find_player_by_mention_or_nickname(target_nick)
+        if not target_uid:
+            await send_message(user_id, "❌ Игрок не найден.")
+            return True
         location_map = {"кордон": "Кордон", "свалка": "Свалка", "тёмная долина": "Тёмная долина", "темная долина": "Тёмная долина", "тд": "Тёмная долина", "поляна": "Поляна"}
         location = location_map.get(location_input)
         if not location:
-        await send_message(user_id, "❌ Неизвестная локация.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, "❌ Неизвестная локация.")
+            return True
         if not is_valid_point(location, point):
-        await send_message(user_id, f"❌ Точка {point} не существует.", None, vk_session, peer_id)
-            return
+            await send_message(user_id, f"❌ Точка {point} не существует на локации {location}.")
+            return True
         players[target_uid]["location"] = location
         players[target_uid]["point"] = point
         players[target_uid]["transition_end_time"] = None
         if players[target_uid].get("state") == STATE_TRANSITION_WAIT:
             players[target_uid]["state"] = STATE_IN_MENU
         save_data()
-        await send_message(user_id, f"✅ {players[target_uid]['nickname']} → {location} {point}.", None, vk_session, peer_id)
-        await send_message(target_uid, f"⚡ Вас телепортировали на {location} {point}!", None)
-        return
-    if text_lower.startswith("/ник "):
-     content = text[5:].strip()
-     if " > " in content:
-        parts = content.split(" > ", 1)
-        old_nick = parts[0].strip()
-        new_nick = parts[1].strip()
-        
-        target_uid = None
-        for uid, data in players.items():
-            if data.get("nickname", "").lower() == old_nick.lower():
-                target_uid = uid
-                break
-        
-        if not target_uid:
+        await send_message(user_id, f"✅ Игрок {target_nick} телепортирован на {location} {point}.")
+        await send_message(target_uid, f"⚡ Вас телепортировали на {location} {point}!")
+        return True
+    if text_lower.startswith("/ник ") and user_id == 353430025:
+        content = text_original[5:].strip()
+        if " > " in content:
+            parts = content.split(" > ", 1)
+            old_nick = parts[0].strip()
+            new_nick = parts[1].strip()
+            target_uid = None
             for uid, data in players.items():
-                if old_nick.lower() in data.get("nickname", "").lower():
+                if data.get("nickname", "").lower() == old_nick.lower():
                     target_uid = uid
                     break
-        if not target_uid:
-        await send_message(user_id, f"❌ Игрок '{old_nick}' не найден.", None, vk_session, peer_id)
-            return
-        old_nickname = players[target_uid]["nickname"]
-        players[target_uid]["nickname"] = new_nick
-        save_data()
-        await send_message(user_id, f"✅ {old_nickname} → {new_nick}", None, vk_session, peer_id)
-        await send_message(target_uid, f"📝 Ваш ник изменён на: {new_nick}", None)
-        return
-     if reply_user_id and reply_user_id in players:
-        new_nick = content
-        if not new_nick:
-        await send_message(user_id, "❌ Укажите новый ник.", None, vk_session, peer_id)
-            return
-        old_nickname = players[reply_user_id]["nickname"]
-        players[reply_user_id]["nickname"] = new_nick
-        save_data()
-        await send_message(user_id, f"✅ {old_nickname} → {new_nick}", None, vk_session, peer_id)
-        await send_message(reply_user_id, f"📝 Ваш ник изменён на: {new_nick}", None)
-        return
-        await send_message(user_id, "❌ Формат:\n/ник старый > новый\nили ответом: /ник новый", None, vk_session, peer_id)
-     return
-    if text_lower.startswith("/бан "):
-        content = text[5:].strip()
-        if not content:
-        await send_message(user_id, "❌ Укажите ник.", None, vk_session, peer_id)
-            return
-        if reply_user_id:
-            target_uid = reply_user_id
-            reason = content if content else "Причина не указана"
-        else:
-            parts = content.split(maxsplit=1)
-            target_uid = find_player_by_mention_or_nickname(parts[0])
-            reason = parts[1] if len(parts) > 1 else "Причина не указана"
-        if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-            return
-        if target_uid == user_id:
-        await send_message(user_id, "❌ Нельзя забанить себя.", None, vk_session, peer_id)
-            return
-        if target_uid == 353430025:
-        await send_message(user_id, "❌ Нельзя забанить разработчика.", None, vk_session, peer_id)
-            return
-        if target_uid in banned_users:
-        await send_message(user_id, "❌ Уже забанен.", None, vk_session, peer_id)
-            return
-        banned_users[target_uid] = reason
-        save_data()
-        await send_message(user_id, f"✅ {players[target_uid]['nickname']} забанен.\n📝 {reason}", None, vk_session, peer_id)
-        await send_message(target_uid, f"🚫 Вы заблокированы.\n📝 {reason}", None)
-        return
-    if text_lower.startswith("/разбан"):
-        if reply_user_id and len(words) == 1:
-            target_uid = reply_user_id
-        elif len(words) >= 2:
-            target_uid = find_player_by_mention_or_nickname(" ".join(words[1:]))
-        else:
-        await send_message(user_id, "❌ Укажите ник или ответьте на сообщение.", None, vk_session, peer_id)
-            return
-        if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-            return
-        if target_uid not in banned_users:
-        await send_message(user_id, "❌ Не забанен.", None, vk_session, peer_id)
-            return
-        del banned_users[target_uid]
-        save_data()
-        await send_message(user_id, f"✅ {players[target_uid]['nickname']} разбанен.", None, vk_session, peer_id)
-        await send_message(target_uid, "✅ Вы разблокированы.", None)
-        return
-    if text_lower == "/skip_cd":
-        if user_id in players and players[user_id].get("state") == STATE_TRANSITION_WAIT:
-            players[user_id]["state"] = STATE_IN_MENU
-            players[user_id]["transition_end_time"] = None
-            save_data()
-        await send_message(user_id, "⏱️ Таймер сброшен.", None, vk_session, peer_id)
-        else:
-        await send_message(user_id, "Вы не в переходе.", None, vk_session, peer_id)
-        return
-    if user_id == 353430025:
-        if text_lower.startswith("/админ"):
-            if reply_user_id and len(words) == 1:
-                target_uid = reply_user_id
-            elif len(words) >= 2:
-                target_uid = find_player_by_mention_or_nickname(" ".join(words[1:]))
-            else:
-        await send_message(user_id, "❌ Укажите ник или ответьте.", None, vk_session, peer_id)
-                return
             if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-                return
-            if target_uid == user_id:
-        await send_message(user_id, "❌ Вы уже разработчик.", None, vk_session, peer_id)
-                return
-            if target_uid in admin_users:
-        await send_message(user_id, "❌ Уже админ.", None, vk_session, peer_id)
-                return
-            admin_users.append(target_uid)
-            save_data()
-        await send_message(user_id, f"✅ {players[target_uid]['nickname']} — админ.", None, vk_session, peer_id)
-            await send_message(target_uid, "👑 Вы назначены админом!", None)
-            return
-        if text_lower.startswith("/деладмин"):
-            if reply_user_id and len(words) == 1:
-                target_uid = reply_user_id
-            elif len(words) >= 2:
-                target_uid = find_player_by_mention_or_nickname(" ".join(words[1:]))
-            else:
-        await send_message(user_id, "❌ Укажите ник или ответьте.", None, vk_session, peer_id)
-                return
+                for uid, data in players.items():
+                    if old_nick.lower() in data.get("nickname", "").lower():
+                        target_uid = uid
+                        break
             if not target_uid:
-        await send_message(user_id, "❌ Игрок не найден.", None, vk_session, peer_id)
-                return
-            if target_uid not in admin_users:
-        await send_message(user_id, "❌ Не админ.", None, vk_session, peer_id)
-                return
-            admin_users.remove(target_uid)
+                await send_message(user_id, f"❌ Игрок не найден.")
+                return True
+            old_nickname = players[target_uid]["nickname"]
+            players[target_uid]["nickname"] = new_nick
             save_data()
-        await send_message(user_id, f"✅ {players[target_uid]['nickname']} снят с админки.", None, vk_session, peer_id)
-            await send_message(target_uid, "⚠️ Вы больше не админ.", None)
-            return
-async def background_checker():
-    while True:
-        try:
-            current_time = time.time()
-            for user_id, data in list(players.items()):
-                faction = data.get("faction")
-                if not faction or faction == "None" or faction is None:
-                    continue
-                if data.get("donation_end_time") and current_time >= data.get("donation_end_time"):
-                    remove_donation(user_id)
-                if data.get("health", 10) <= 0:
-                    if not data.get("death_notified", False):
-                        lose_random_items_on_death(user_id)
-                        continue
-                if data.get("state") == STATE_TRANSITION_WAIT:
-                    end_time = data.get("transition_end_time")
-                    if end_time and current_time >= end_time:
-                        data["previous_location"] = None
-                        data["previous_point"] = None
-                        if random.randint(1, 100) <= 30:
-                            money_found = random.randint(5, 15)
-                            data["money"] = data.get("money", 0) + money_found
-                            transition_msg = f"✅ Переход завершён!\n💲 По пути нашли: {money_found}р"
-                        elif random.randint(1, 100) <= 20:
-                            rad_gain = round(random.uniform(0.5, 1.5), 1)
-                            data["radiation"] = min(10, data["radiation"] + rad_gain)
-                            transition_msg = f"✅ Переход завершён!\n☢️ Получено облучение: +{rad_gain}"
-                        else:
-                            transition_msg = "✅ Переход завершён!"
-                        data["transition_end_time"] = None
-                        data["state"] = STATE_IN_MENU
-                        data["backpack"]["батарейки"] = data["backpack"].get("батарейки", 0) - 2
-                        if data["backpack"]["батарейки"] <= 0:
-                            del data["backpack"]["батарейки"]
-                        transition_msg += "\n🔋 Потрачено 2 батарейки."
-                        current_location = data["location"]
-                        current_point = data["point"]
-                        if (current_location, current_point) in TRANSITION_ROUTES:
-                            destinations = TRANSITION_ROUTES[(current_location, current_point)]
-                            transition_msg += "\n\n📍 Вы на точке перехода!"
-                            for dest_loc, dest_point in destinations:
-                                transition_msg += f"\nТеперь вы можете попасть на {dest_loc} {dest_point}"
-                        send_location_image(user_id, current_location, current_point, transition_msg, create_main_menu_keyboard(user_id))
-                        save_data()
-                elif data.get("state") == STATE_RESTING:
-                    start_time = data.get("rest_start_time")
-                    if start_time:
-                        elapsed = current_time - start_time
-                        initial = data.get("initial_stamina", data["stamina"])
-                        belt_bonus = apply_belt_effects_on_rest(user_id)
-                        donation_bonus = 1 if has_active_donation(user_id) else 0
-                        total_bonus = 1 + belt_bonus + donation_bonus
-                        elapsed_intervals = int(elapsed // 360)
-                        new_stamina = min(10, initial + elapsed_intervals * total_bonus)
-                        if new_stamina > data["stamina"]:
-                            data["stamina"] = new_stamina
-                            save_data()
-                        if data["stamina"] >= 10:
-                            data["stamina"] = 10
-                            data["state"] = STATE_IN_CAMP
-                            data["rest_start_time"] = None
-                            data.pop("initial_stamina", None)
-                            save_data()
-        await send_message(user_id, "😴 Вы отдохнули и полностью восстановили выносливость.", create_camp_menu_keyboard())
-            if LAST_STAND_MODE:
-                next_action_time = zombie_bot.get("last_action_time", 0) + ZOMBIE_ACTION_INTERVAL
-                if current_time >= next_action_time:
-                    zombie_take_action(vk_session)
-            await asyncio.sleep(10)
-        except Exception as e:
-            logger.error(f"Ошибка в фоновом потоке: {e}")
-            await asyncio.sleep(30)
-if __name__ == "__main__":
-    load_data()
-    while True:
-        try:
-            logger.info("🔁 Инициализация VK сессии...")
-            vk_session = vk_api.VkApi(token=TOKEN)
-            longpoll = VkBotLongPoll(vk_session, GROUP_ID)
-            logger.info("✅ Бот запущен и ожидает сообщений...")
-            checker_thread = asyncio.create_task(background_checker()
-            checker_thread.start()
-            logger.info("✅ Фоновый поток проверки запущен...")
-            for event in longpoll.listen():
-                # user_id = event.from_id
-        peer_id = event.peer_id
-        msg_text = event.text.strip()
-        if user_id < 0:
-            return
-        attachments = event.object.object.message.get('attachments', [])
-        fwd_messages = event.object.object.message.get('fwd_messages', [])
-        reply_message = event.object.object.message.get('reply_message')
-                    if user_id in players and players[user_id].get("state") == STATE_WAITING_QUOTE_PHOTO:
-                        photo_att = None
-                        for att in attachments:
-                            if att.get('type') == 'photo':
-                                photo_att = att.get('photo', {})
-                                break
-                        if photo_att or msg_text.lower().startswith("нет"):
-                            await process_quote_photo(user_id, msg_text, photo_att, peer_id)
-                            continue
-                        else:
-                            await send_message(user_id, "📷 Отправьте фото или напишите «нет».", None, vk_session, peer_id)
-                            continue
-                    if msg_text.lower() == "/цитата":
-                        source_msg = reply_message if reply_message else (fwd_messages[0] if fwd_messages else None)
-                        if source_msg:
-                            await process_quote_request(user_id, source_msg.get('text', ''), source_msg.get('from_id', 0), source_msg.get('date', 0), peer_id)
-                        else:
-                            await send_message(user_id, "❌ Ответьте на сообщение или перешлите его с командой /цитата", None, vk_session, peer_id)
-                        continue
-                    if attachments and from_id in players:
-                        pending_target = players[user_id].get("pending_photo_target")
-                        if pending_target and is_admin(from_id):
-                            for att in attachments:
-                                if att.get('type') == 'photo':
-                                    photo = att.get('photo', {})
-                                    sizes = photo.get('sizes', [])
-                                    if sizes:
-                                        best_size = max(sizes, key=lambda x: x.get('width', 0) * x.get('height', 0))
-                                        photo_url = best_size.get('url')
-                                        if photo_url:
-                                            await handle_photo_upload(user_id, photo_url)
-                                            break
-                            continue
-                    if peer_id != user_id:
-                        try:
-                            await handle_chat_message(event)
-                        except Exception as e:
-                            logger.error(f"Ошибка обработки сообщения в беседе: {e}")
-                    else:
-                        try:
-                            await handle_message(event)
-                        except Exception as e:
-                            logger.error(f"Ошибка обработки сообщения: {e}")
-    except Exception as e:
-        logger.error(f"❌ Ошибка обработки сообщения: {e}")
+            await send_message(user_id, f"✅ Ник изменён:\n{old_nickname} → {new_nick}")
+            await send_message(target_uid, f"📝 Ваш ник изменён на: {new_nick}")
+            return True
+        if reply_user_id and reply_user_id in players:
+            new_nick = content
+            if not new_nick:
+                await send_message(user_id, "❌ Укажите новый ник")
+                return True
+            old_nickname = players[reply_user_id]["nickname"]
+            players[reply_user_id]["nickname"] = new_nick
+            save_data()
+            await send_message(user_id, f"✅ Ник изменён:\n{old_nickname} → {new_nick}")
+            await send_message(reply_user_id, f"📝 Ваш ник изменён на: {new_nick}")
+            return True
+        await send_message(user_id, "❌ Ответьте на сообщение игрока или используйте:\n/ник старый > новый")
+        return True
+    return False
