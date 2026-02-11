@@ -21,6 +21,21 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "bot.db"
 AVATAR_DIR = "custom_avatars"
 os.makedirs(AVATAR_DIR, exist_ok=True)
+EQUIPMENT_ICON_DIR = "icons/equipment"
+os.makedirs(EQUIPMENT_ICON_DIR, exist_ok=True)
+EQUIPMENT_ICON_PATHS = {}
+def get_equipment_icon(name):
+    if not name:
+        return None
+    if name in EQUIPMENT_ICON_PATHS:
+        path = EQUIPMENT_ICON_PATHS[name]
+        if os.path.exists(path):
+            return path
+    safe_name = name.replace(" ", "_").replace("«", "").replace("»", "").replace("'", "").replace("ё", "е")
+    path = os.path.join(EQUIPMENT_ICON_DIR, f"{safe_name}.png")
+    if os.path.exists(path):
+        return path
+    return None
 CELL_SIZE = 60
 MARGIN = 5
 COLUMNS = 5
