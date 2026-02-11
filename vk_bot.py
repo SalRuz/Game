@@ -4277,389 +4277,259 @@ def generate_inventory_image(user_id):
     p = players[user_id]
     backpack = p.get("backpack", {})
     W, H = 900, 560
-    BG_COLOR = (25, 28, 30)
-    SLOT_BG = (40, 45, 45, 200)
-    BORDER_COLOR = (80, 90, 80)
-    BORDER_LIGHT = (120, 130, 110)
-    TEXT_COLOR = (180, 190, 180)
-    MONEY_COLOR = (230, 180, 50)
-    BAR_BG = (20, 20, 20)
-    GRID_COLOR = (50, 55, 60)
-    LEFT_W = 350
-    CELL = 48
-    INV_COLS = 10
-    INV_ROWS = 10
+    BG_CLR = (20, 22, 24)
+    SLOT_BG = (35, 40, 38, 200)
+    BORDER = (70, 80, 65)
+    BORDER_L = (110, 120, 100)
+    TEXT_CLR = (170, 180, 170)
+    TEXT_B = (220, 225, 220)
+    MONEY_CLR = (230, 180, 50)
+    GRID_CLR = (50, 55, 50)
+    BAR_BG = (20, 22, 20)
+    LABEL_CLR = (200, 200, 100)
+    EMPTY_CLR = (100, 100, 100)
     try:
-        font = ImageFont.truetype("Graffiti1C.ttf", 16)
-        font_small = ImageFont.truetype("Graffiti1C.ttf", 12)
-        font_title = ImageFont.truetype("Graffiti1C.ttf", 20)
-        font_money = ImageFont.truetype("Graffiti1C.ttf", 22)
+        font = ImageFont.truetype("Graffiti1C.ttf", 15)
+        font_s = ImageFont.truetype("Graffiti1C.ttf", 12)
+        font_t = ImageFont.truetype("Graffiti1C.ttf", 18)
+        font_m = ImageFont.truetype("Graffiti1C.ttf", 20)
     except:
         try:
-            font = ImageFont.truetype("arial.ttf", 16)
-            font_small = ImageFont.truetype("arial.ttf", 12)
-            font_title = ImageFont.truetype("arial.ttf", 20)
-            font_money = ImageFont.truetype("arial.ttf", 22)
+            font = ImageFont.truetype("arial.ttf", 15)
+            font_s = ImageFont.truetype("arial.ttf", 12)
+            font_t = ImageFont.truetype("arial.ttf", 18)
+            font_m = ImageFont.truetype("arial.ttf", 20)
         except:
             font = ImageFont.load_default()
-            font_small = font
-            font_title = font
-            font_money = font
+            font_s = font
+            font_t = font
+            font_m = font
     try:
         bg = Image.open("backgrounds/inventory_bg.png").convert("RGBA").resize((W, H))
     except:
-        bg = Image.new("RGBA", (W, H), BG_COLOR)
+        bg = Image.new("RGBA", (W, H), BG_CLR)
     img = bg.copy()
     draw = ImageDraw.Draw(img)
     all_icons = {**ITEM_ICONS, **ARTIFACT_ICONS}
-    def dto(x, y, text, f, fill=TEXT_COLOR):
+    def dto(x, y, t, f, c=TEXT_CLR):
         for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
-            draw.text((x+dx,y+dy), text, fill=(0,0,0), font=f)
-        draw.text((x,y), text, fill=fill, font=f)
+            draw.text((x+dx, y+dy), t, fill=(0,0,0), font=f)
+        draw.text((x, y), t, fill=c, font=f)
     def draw_frame(x, y, w, h, title=None):
-        draw.rectangle([x,y,x+w,y+h], fill=(30,35,30,200), outline=BORDER_COLOR, width=2)
-        ll = 8
-        draw.line([(x,y),(x+ll,y)], fill=BORDER_LIGHT, width=2)
-        draw.line([(x,y),(x,y+ll)], fill=BORDER_LIGHT, width=2)
-        draw.line([(x+w-ll,y),(x+w,y)], fill=BORDER_LIGHT, width=2)
-        draw.line([(x+w,y),(x+w,y+ll)], fill=BORDER_LIGHT, width=2)
-        draw.line([(x,y+h-ll),(x,y+h)], fill=BORDER_LIGHT, width=2)
-        draw.line([(x,y+h),(x+ll,y+h)], fill=BORDER_LIGHT, width=2)
-        draw.line([(x+w,y+h-ll),(x+w,y+h)], fill=BORDER_LIGHT, width=2)
-        draw.line([(x+w-ll,y+h),(x+w,y+h)], fill=BORDER_LIGHT, width=2)
+        draw.rectangle([x, y, x+w, y+h], fill=(28, 32, 28, 200), outline=BORDER, width=2)
+        L = 8
+        for cx, cy in [(x,y),(x+w,y),(x,y+h),(x+w,y+h)]:
+            hx = cx - L if cx == x + w else cx
+            hx2 = cx + L if cx == x else cx
+            draw.line([(hx, cy), (hx2, cy)], fill=BORDER_L, width=2)
+            vy = cy - L if cy == y + h else cy
+            vy2 = cy + L if cy == y else cy
+            draw.line([(cx, vy), (cx, vy2)], fill=BORDER_L, width=2)
         if title:
-            dto(x+5, y+3, title, font_small)
-    def draw_bar(x, y, w, h, value, max_val, color, label=""):
-        draw.rectangle([x,y,x+w,y+h], fill=BAR_BG, outline=BORDER_COLOR, width=1)
-        if max_val > 0:
-            fw = int((value/max_val)*(w-4))
+            dto(x + 5, y + 3, title, font_s, LABEL_CLR)
+    def draw_bar(x, y, w, h, val, mx, color, label):
+        draw.rectangle([x, y, x+w, y+h], fill=BAR_BG, outline=BORDER, width=1)
+        if mx > 0:
+            fw = int((val / mx) * (w - 4))
             if fw > 0:
-                draw.rectangle([x+2,y+2,x+2+fw,y+h-2], fill=color)
-            for i in range(1,10):
-                tx = x+2+int(i*(w-4)/10)
-                draw.line([(tx,y+2),(tx,y+h-2)], fill=(0,0,0), width=1)
-        if label:
-            dto(x+w+5, y-2, label, font_small)
-    av_size = 80
-    av_x, av_y = 15, 15
-    draw.rectangle([av_x-2,av_y-2,av_x+av_size+2,av_y+av_size+2], outline=BORDER_COLOR, width=2)
-    av_path = os.path.join(AVATAR_DIR, f"{user_id}.png")
-    if os.path.exists(av_path):
+                draw.rectangle([x+2, y+2, x+2+fw, y+h-2], fill=color)
+            for i in range(1, 10):
+                tx = x + 2 + int(i * (w - 4) / 10)
+                draw.line([(tx, y+2), (tx, y+h-2)], fill=(0,0,0), width=1)
+        dto(x + w + 5, y - 1, label, font_s)
+    def paste_equip_icon(icon_path, sx, sy, sw, max_h):
         try:
-            avatar = Image.open(av_path).convert("RGBA").resize((av_size,av_size))
-            img.paste(avatar, (av_x,av_y), avatar)
+            eqi = Image.open(icon_path).convert("RGBA")
+            eqi.thumbnail((sw - 16, max_h))
+            epx = sx + (sw - eqi.width) // 2
+            epy = sy + 18 + (max_h - eqi.height) // 2
+            img.paste(eqi, (epx, epy), eqi)
+            return True
         except:
-            draw.rectangle([av_x,av_y,av_x+av_size,av_y+av_size], fill=SLOT_BG)
-    else:
-        draw.rectangle([av_x,av_y,av_x+av_size,av_y+av_size], fill=SLOT_BG)
-    ix = av_x + av_size + 10
-    dto(ix, av_y, p.get("nickname","Stalker"), font_title)
-    faction = p.get("faction","")
-    fi_path = FACTION_ICONS.get(faction)
-    fi_size = 18
-    if fi_path and os.path.exists(fi_path):
+            return False
+    av_s = 72
+    ax, ay = 15, 12
+    draw.rectangle([ax-2, ay-2, ax+av_s+2, ay+av_s+2], outline=BORDER, width=2)
+    av_p = os.path.join(AVATAR_DIR, f"{user_id}.png")
+    if os.path.exists(av_p):
         try:
-            fi_img = Image.open(fi_path).convert("RGBA").resize((fi_size,fi_size))
-            img.paste(fi_img, (ix, av_y+25), fi_img)
+            av = Image.open(av_p).convert("RGBA").resize((av_s, av_s))
+            img.paste(av, (ax, ay), av)
+        except:
+            draw.rectangle([ax, ay, ax+av_s, ay+av_s], fill=SLOT_BG)
+    else:
+        draw.rectangle([ax, ay, ax+av_s, ay+av_s], fill=SLOT_BG)
+    ix = ax + av_s + 10
+    dto(ix, ay, p.get("nickname", "Stalker"), font_t, TEXT_B)
+    faction = p.get("faction", "")
+    fi_p = FACTION_ICONS.get(faction)
+    if fi_p and os.path.exists(fi_p):
+        try:
+            fi = Image.open(fi_p).convert("RGBA").resize((16, 16))
+            img.paste(fi, (ix, ay + 24), fi)
         except:
             pass
-    fc = faction.replace("🛡️ ","").replace("☦️ ","").replace("☢️ ","")
-    dto(ix+fi_size+5, av_y+25, fc, font)
-    loc = p.get("location","Лагерь")
-    pt = p.get("point","Б1")
-    dto(ix, av_y+48, f"{loc} {pt}", font)
-    money = p.get("money",0)
-    draw.rectangle([ix,av_y+68,ix+150,av_y+95], outline=MONEY_COLOR, width=2)
-    dto(ix+5, av_y+72, f"$ {money} RU", font_money, fill=MONEY_COLOR)
+    fc = faction.replace("🛡️ ", "").replace("☦️ ", "").replace("☢️ ", "")
+    dto(ix + 20, ay + 24, fc, font)
+    loc = p.get("location", "Лагерь")
+    pt = p.get("point", "Б1")
+    dto(ix, ay + 44, f"{loc} {pt}", font)
+    money = p.get("money", 0)
+    draw.rectangle([ix, ay+64, ix+140, ay+88], outline=MONEY_CLR, width=2)
+    dto(ix + 5, ay + 67, f"$ {money} RU", font_m, MONEY_CLR)
     eq_y = 115
-    sw, sh = 100, 100
-    sg = 8
-    wx = 15
-    draw_frame(wx, eq_y, sw, sh, "ОРУЖИЕ")
-    weapon = p.get("weapon")
-    if weapon:
-        dto(wx+5, eq_y+18, weapon[:14], font_small)
-        wd = p.get("weapon_durability",0)
-        wmd = p.get("weapon_max_durability",0)
-        dto(wx+5, eq_y+36, f"🔧{wd}/{wmd}", font_small)
-        wdmg = p.get("weapon_damage",0)+get_belt_bonus(user_id,"weapon_damage")
-        wacc = int(p.get("weapon_accuracy",0)+get_belt_bonus(user_id,"weapon_accuracy"))
-        dto(wx+5, eq_y+54, f"💢{wdmg}", font_small)
-        dto(wx+5, eq_y+70, f"🎯{wacc}/9", font_small)
-    asx = wx + sw + sg
+    sw, sh = 105, 125
+    sg = 5
+    wname = p.get("weapon")
+    draw_frame(10, eq_y, sw, sh, "ОРУЖИЕ")
+    if wname:
+        icon_p = get_equipment_icon(wname)
+        has_icon = False
+        if icon_p:
+            has_icon = paste_equip_icon(icon_p, 10, eq_y, sw, 55)
+        ty = eq_y + 78 if has_icon else eq_y + 20
+        dto(15, ty, wname[:13], font_s, TEXT_B)
+        wd = p.get("weapon_durability", 0)
+        wmd = p.get("weapon_max_durability", 0)
+        dto(15, ty + 14, f"🔧{wd}/{wmd}", font_s)
+        wdmg = round(p.get("weapon_damage", 0) + get_belt_bonus(user_id, "weapon_damage"), 1)
+        wacc = int(p.get("weapon_accuracy", 0) + get_belt_bonus(user_id, "weapon_accuracy"))
+        dto(15, ty + 28, f"💢{wdmg} 🎯{wacc}", font_s)
+    else:
+        dto(30, eq_y + 55, "пусто", font_s, EMPTY_CLR)
+    aname = p.get("armor")
+    asx = 10 + sw + sg
     draw_frame(asx, eq_y, sw, sh, "БРОНЯ")
-    armor_name = p.get("armor")
-    if armor_name:
-        dto(asx+5, eq_y+18, armor_name[:14], font_small)
-        ad = p.get("armor_durability",0)
-        amd = p.get("armor_max_durability",0)
-        dto(asx+5, eq_y+36, f"🔧{ad}/{amd}", font_small)
-        br = p.get("bullet_resist",0)+get_belt_bonus(user_id,"bullet_resist")
-        bl = p.get("blast_resist",0)+get_belt_bonus(user_id,"blast_resist")
-        an = p.get("anomaly_resist",0)+get_belt_bonus(user_id,"anomaly_resist")
-        dto(asx+5, eq_y+54, f"🛡{br} 🐾{bl}", font_small)
-        dto(asx+5, eq_y+70, f"💥{an}", font_small)
-    dsx = asx + sw + sg
+    if aname:
+        icon_p = get_equipment_icon(aname)
+        has_icon = False
+        if icon_p:
+            has_icon = paste_equip_icon(icon_p, asx, eq_y, sw, 55)
+        ty = eq_y + 78 if has_icon else eq_y + 20
+        dto(asx + 5, ty, aname[:13], font_s, TEXT_B)
+        ad = p.get("armor_durability", 0)
+        amd = p.get("armor_max_durability", 0)
+        dto(asx + 5, ty + 14, f"🔧{ad}/{amd}", font_s)
+        br = round(p.get("bullet_resist", 0) + get_belt_bonus(user_id, "bullet_resist"), 1)
+        bl = round(p.get("blast_resist", 0) + get_belt_bonus(user_id, "blast_resist"), 1)
+        an = round(p.get("anomaly_resist", 0) + get_belt_bonus(user_id, "anomaly_resist"), 1)
+        dto(asx + 5, ty + 28, f"🛡{br}🐾{bl}💥{an}", font_s)
+    else:
+        dto(asx + 20, eq_y + 55, "пусто", font_s, EMPTY_CLR)
+    dname = p.get("detector")
+    dsx = 10 + 2 * (sw + sg)
     draw_frame(dsx, eq_y, sw, sh, "ДЕТЕКТОР")
-    det = p.get("detector")
-    if det:
-        dto(dsx+5, eq_y+40, det, font_small)
-        dc = p.get("detector_charge",0)
-        dmc = p.get("detector_max_charge",0)
-        dto(dsx+5, eq_y+60, f"🔋{dc}/{dmc}", font_small)
+    if dname:
+        icon_p = get_equipment_icon(dname)
+        has_icon = False
+        if icon_p:
+            has_icon = paste_equip_icon(icon_p, dsx, eq_y, sw, 55)
+        ty = eq_y + 78 if has_icon else eq_y + 35
+        dto(dsx + 5, ty, dname, font_s, TEXT_B)
+        dc = p.get("detector_charge", 0)
+        dmc = p.get("detector_max_charge", 0)
+        dto(dsx + 5, ty + 16, f"🔋{dc}/{dmc}", font_s)
+    else:
+        dto(dsx + 20, eq_y + 55, "пусто", font_s, EMPTY_CLR)
     bly = eq_y + sh + 15
-    dto(15, bly, "ПОЯС АРТЕФАКТОВ", font_small, fill=(200,200,100))
+    dto(10, bly, "ПОЯС АРТЕФАКТОВ", font_s, LABEL_CLR)
     bly += 18
-    belt = p.get("belt",[None,None,None])
-    bc = 55
-    bgap = 10
+    belt = p.get("belt", [None, None, None])
+    bc = 52
+    bgap = 8
     for i in range(3):
-        bxx = 15 + i*(bc+bgap)
-        draw.rectangle([bxx,bly,bxx+bc,bly+bc], fill=SLOT_BG, outline=BORDER_COLOR, width=2)
-        dto(bxx+3, bly+2, str(i+1), font_small, fill=(150,150,100))
+        bxx = 10 + i * (bc + bgap)
+        draw.rectangle([bxx, bly, bxx+bc, bly+bc], fill=SLOT_BG, outline=BORDER, width=2)
+        dto(bxx + 3, bly + 2, str(i + 1), font_s, (150, 150, 100))
         if belt[i]:
             ip = all_icons.get(belt[i])
             if ip and os.path.exists(ip):
                 try:
-                    bi = Image.open(ip).convert("RGBA").resize((bc-8,bc-8))
-                    img.paste(bi, (bxx+4,bly+4), bi)
+                    bi = Image.open(ip).convert("RGBA").resize((bc-8, bc-8))
+                    img.paste(bi, (bxx+4, bly+4), bi)
                 except:
                     pass
     sty = bly + bc + 20
-    bx_bar = 15
-    bw_bar = LEFT_W - 80
-    bh_bar = 16
-    bgp_bar = 28
-    health = p.get("health",10)
-    radiation = p.get("radiation",0)
-    hunger = p.get("hunger",0)
-    stamina = p.get("stamina",10)
-    dto(bx_bar, sty, "ХАРАКТЕРИСТИКИ", font_small, fill=(200,200,100))
-    sty += 20
-    draw_bar(bx_bar, sty, bw_bar, bh_bar, health, 10, (180,50,50), f"❤️ {health}/10")
-    draw_bar(bx_bar, sty+bgp_bar, bw_bar, bh_bar, radiation, 10, (50,180,50), f"☢️ {radiation}/10")
-    draw_bar(bx_bar, sty+bgp_bar*2, bw_bar, bh_bar, hunger, 10, (200,170,60), f"🍽️ {hunger}/10")
-    draw_bar(bx_bar, sty+bgp_bar*3, bw_bar, bh_bar, stamina, 10, (70,150,200), f"⚡ {stamina}/10")
-    GX = LEFT_W + 20
-    GY = 15
-    dto(GX, GY, "ИНВЕНТАРЬ", font_small, fill=(200,200,100))
-    GY += 22
-    gw = INV_COLS * CELL
-    gh = INV_ROWS * CELL
-    draw.rectangle([GX-2,GY-2,GX+gw+2,GY+gh+2], outline=BORDER_COLOR, width=2)
+    bx_b = 10
+    bw_b = 220
+    bh_b = 14
+    bsp = 26
+    hp = p.get("health", 10)
+    rad = p.get("radiation", 0)
+    hun = p.get("hunger", 0)
+    sta = p.get("stamina", 10)
+    dto(bx_b, sty, "ХАРАКТЕРИСТИКИ", font_s, LABEL_CLR)
+    sty += 18
+    draw_bar(bx_b, sty, bw_b, bh_b, hp, 10, (180, 50, 50), f"❤️{hp}/10")
+    draw_bar(bx_b, sty + bsp, bw_b, bh_b, rad, 10, (50, 180, 50), f"☢️{rad}/10")
+    draw_bar(bx_b, sty + bsp*2, bw_b, bh_b, hun, 10, (200, 170, 60), f"🍽️{hun}/10")
+    draw_bar(bx_b, sty + bsp*3, bw_b, bh_b, sta, 10, (70, 150, 200), f"⚡{sta}/10")
+    CELL = 50
+    COLS = 10
+    ROWS = 10
+    GX = 370
+    GY = 10
+    dto(GX, GY, "ИНВЕНТАРЬ", font_s, LABEL_CLR)
+    GY += 20
+    gw = COLS * CELL
+    gh = ROWS * CELL
+    draw.rectangle([GX-2, GY-2, GX+gw+2, GY+gh+2], outline=BORDER, width=2)
     try:
-        empty_icon = Image.open("icons/empty.png").convert("RGBA").resize((CELL-4,CELL-4))
+        empty_ic = Image.open("icons/empty.png").convert("RGBA").resize((CELL-4, CELL-4))
     except:
-        empty_icon = None
-    items_list = []
-    active_items = {k:v for k,v in backpack.items() if v > 0}
+        empty_ic = None
+    il = []
+    ai = {k: v for k, v in backpack.items() if v > 0}
     sm = get_sort_mode(user_id)
     if sm == 1:
-        for cat in ["еда","медикаменты","антирад","энергетики","прочее"]:
-            for name in CATEGORIES[cat]:
-                if name in active_items:
-                    items_list.append((name, active_items[name]))
+        for cat in ["еда", "медикаменты", "антирад", "энергетики", "прочее"]:
+            for nm in CATEGORIES[cat]:
+                if nm in ai:
+                    il.append((nm, ai[nm]))
         for art in ALL_ARTIFACTS:
-            if art in active_items:
-                items_list.append((art, active_items[art]))
-        already_added = set()
-        for cat_items in CATEGORIES.values():
-            already_added.update(cat_items)
-        already_added.update(ALL_ARTIFACTS)
-        for name, count in active_items.items():
-            if name not in already_added:
-                items_list.append((name, count))
+            if art in ai:
+                il.append((art, ai[art]))
+        added = set()
+        for ci in CATEGORIES.values():
+            added.update(ci)
+        added.update(ALL_ARTIFACTS)
+        for nm, cnt in ai.items():
+            if nm not in added:
+                il.append((nm, cnt))
     elif sm == 2:
-        items_list = sorted(active_items.items(), key=lambda x: x[1], reverse=True)
+        il = sorted(ai.items(), key=lambda x: x[1], reverse=True)
     else:
-        for item, count in backpack.items():
-            if count > 0:
-                items_list.append((item, count))
-    mc = INV_COLS * INV_ROWS
-    while len(items_list) < mc:
-        items_list.append((None, 0))
-    items_list = items_list[:mc]
-    for idx, (item, count) in enumerate(items_list):
-        r = idx // INV_COLS
-        c = idx % INV_COLS
+        for item, cnt in backpack.items():
+            if cnt > 0:
+                il.append((item, cnt))
+    mx = COLS * ROWS
+    while len(il) < mx:
+        il.append((None, 0))
+    il = il[:mx]
+    for idx, (item, count) in enumerate(il):
+        r = idx // COLS
+        c = idx % COLS
         x = GX + c * CELL
         y = GY + r * CELL
-        draw.rectangle([x,y,x+CELL-1,y+CELL-1], fill=SLOT_BG, outline=GRID_COLOR, width=1)
+        draw.rectangle([x, y, x+CELL-1, y+CELL-1], fill=SLOT_BG, outline=GRID_CLR, width=1)
         if item:
             ip = all_icons.get(item)
             if ip and os.path.exists(ip):
                 try:
-                    icon = Image.open(ip).convert("RGBA").resize((CELL-6,CELL-6))
-                    img.paste(icon, (x+3,y+3), icon)
+                    ic = Image.open(ip).convert("RGBA").resize((CELL-6, CELL-6))
+                    img.paste(ic, (x+3, y+3), ic)
                 except:
                     pass
             if count > 1:
                 ct = str(count)
-                for ddx,ddy in [(-1,0),(1,0),(0,-1),(0,1)]:
-                    draw.text((x+CELL-18+ddx,y+CELL-18+ddy), ct, fill=(0,0,0), font=font_small)
-                draw.text((x+CELL-18,y+CELL-18), ct, fill=(255,255,255), font=font_small)
-        elif empty_icon:
-            img.paste(empty_icon, (x+2,y+2), empty_icon)
+                for ddx, ddy in [(-1,0),(1,0),(0,-1),(0,1)]:
+                    draw.text((x+CELL-18+ddx, y+CELL-16+ddy), ct, fill=(0,0,0), font=font_s)
+                draw.text((x+CELL-18, y+CELL-16), ct, fill=(255,255,255), font=font_s)
+        elif empty_ic:
+            img.paste(empty_ic, (x+2, y+2), empty_ic)
     scx = GX + gw + 5
-    draw.rectangle([scx,GY,scx+12,GY+gh], fill=(30,30,30), outline=BORDER_COLOR)
-    draw.rectangle([scx+2,GY+2,scx+10,GY+40], fill=(100,100,100))
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    buffer.seek(0)
-    return buffer
-    def draw_text_with_outline(x, y, text, font_used, fill=(255, 255, 255)):
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)]:
-            draw.text((x + dx, y + dy), text, fill=(0, 0, 0), font=font_used)
-        draw.text((x, y), text, fill=fill, font=font_used)
-    def draw_stalker_frame(x, y, w, h, title=None):
-        draw.rectangle([x, y, x + w, y + h], fill=(30, 35, 30, 200), outline=COLOR_FRAME, width=2)
-        draw.line([(x, y), (x + 8, y)], fill=COLOR_FRAME_LIGHT, width=2)
-        draw.line([(x, y), (x, y + 8)], fill=COLOR_FRAME_LIGHT, width=2)
-        draw.line([(x + w - 8, y), (x + w, y)], fill=COLOR_FRAME_LIGHT, width=2)
-        draw.line([(x + w, y), (x + w, y + 8)], fill=COLOR_FRAME_LIGHT, width=2)
-        draw.line([(x, y + h - 8), (x, y + h)], fill=COLOR_FRAME_LIGHT, width=2)
-        draw.line([(x, y + h), (x + 8, y + h)], fill=COLOR_FRAME_LIGHT, width=2)
-        draw.line([(x + w, y + h - 8), (x + w, y + h)], fill=COLOR_FRAME_LIGHT, width=2)
-        draw.line([(x + w - 8, y + h), (x + w, y + h)], fill=COLOR_FRAME_LIGHT, width=2)
-        if title:
-            draw_text_with_outline(x + 5, y + 3, title, font_small)
-    def draw_bar_stalker(x, y, w, h, value, max_val, color, label_icon):
-        draw.rectangle([x, y, x + w, y + h], fill=(20, 25, 20, 255), outline=COLOR_FRAME, width=1)
-        if max_val > 0:
-            fill_w = int((value / max_val) * (w - 4))
-            if fill_w > 0:
-                for i in range(fill_w):
-                    draw.line([(x + 2 + i, y + 2), (x + 2 + i, y + h - 2)], fill=color, width=1)
-        draw_text_with_outline(x + w + 5, y - 2, f"{label_icon}{value}/{max_val}", font)
-    panel_x = 5
-    panel_y = 5
-    avatar_size = int(CELL_SIZE * 2 / 1.5)
-    avatar_x = panel_x + 3
-    avatar_y = panel_y + 3
-    draw.rectangle([avatar_x - 2, avatar_y - 2, avatar_x + avatar_size + 2, avatar_y + avatar_size + 2], outline=COLOR_FRAME, width=2)
-    avatar_path = os.path.join(AVATAR_DIR, f"{user_id}.png")
-    if os.path.exists(avatar_path):
-        try:
-            avatar = Image.open(avatar_path).convert("RGBA").resize((avatar_size, avatar_size))
-            img.paste(avatar, (avatar_x, avatar_y), avatar)
-        except:
-            draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=COLOR_SLOT_EMPTY)
-    else:
-        draw.rectangle([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=COLOR_SLOT_EMPTY)
-    info_x = avatar_x + avatar_size + 10
-    info_y = avatar_y
-    draw_text_with_outline(info_x, info_y, f"{p['nickname']}", font_title)
-    info_y += 22
-    faction = p.get("faction", "")
-    faction_icon_path = FACTION_ICONS.get(faction)
-    faction_icon_size = 18
-    if faction_icon_path and os.path.exists(faction_icon_path):
-        try:
-            faction_icon = Image.open(faction_icon_path).convert("RGBA").resize((faction_icon_size, faction_icon_size))
-            img.paste(faction_icon, (info_x, info_y), faction_icon)
-        except:
-            pass
-    faction_clean = faction.replace("🛡️ ", "").replace("☦️ ", "").replace("☢️ ", "")
-    draw_text_with_outline(info_x + faction_icon_size + 5, info_y, f"{faction_clean}", font)
-    info_y += 22
-    location = p.get("location", "Лагерь")
-    point = p.get("point", "Б1")
-    draw_text_with_outline(info_x, info_y, f"{location} {point}", font)
-    info_y += 20
-    money = p.get("money", 0)
-    draw_text_with_outline(info_x, info_y, f"$ {money} RU", font)
-    belt_y = height - 130
-    draw_text_with_outline(panel_x + 5, belt_y - 18, "ПОЯС", font_small)
-    belt = p.get("belt", [None, None, None])
-    belt_cell_size = 40
-    belt_spacing = 6
-    for i in range(3):
-        cell_x = panel_x + 5 + i * (belt_cell_size + belt_spacing)
-        draw.rectangle([cell_x, belt_y, cell_x + belt_cell_size, belt_y + belt_cell_size], fill=COLOR_SLOT_EMPTY, outline=COLOR_FRAME, width=1)
-        draw_text_with_outline(cell_x + 3, belt_y + 2, f"{i+1}", font_small)
-        if belt[i]:
-            icon_path = all_icons.get(belt[i])
-            if icon_path and os.path.exists(icon_path):
-                try:
-                    belt_icon = Image.open(icon_path).convert("RGBA").resize((belt_cell_size - 8, belt_cell_size - 8))
-                    img.paste(belt_icon, (cell_x + 4, belt_y + 4), belt_icon)
-                except:
-                    pass
-    stats_y = belt_y + belt_cell_size + 10
-    bar_x = panel_x + 5
-    bar_w = 100
-    bar_h = 14
-    bar_spacing = 20
-    health = p.get("health", 10)
-    radiation = p.get("radiation", 0)
-    hunger = p.get("hunger", 0)
-    stamina = p.get("stamina", 10)
-    draw_bar_stalker(bar_x, stats_y, bar_w, bar_h, health, 10, COLOR_HEALTH, "❤️")
-    draw_bar_stalker(bar_x, stats_y + bar_spacing, bar_w, bar_h, radiation, 10, COLOR_RADIATION, "☢️")
-    draw_bar_stalker(bar_x, stats_y + bar_spacing * 2, bar_w, bar_h, hunger, 10, COLOR_HUNGER, "🍽️")
-    draw_bar_stalker(bar_x, stats_y + bar_spacing * 3, bar_w, bar_h, stamina, 10, COLOR_STAMINA, "⚡")
-    inv_panel_x = LEFT_PANEL_WIDTH
-    inv_panel_y = 5
-    inv_panel_w = INV_COLS * CELL_SIZE + 12
-    inv_panel_h = INV_ROWS * CELL_SIZE + 25
-    draw_stalker_frame(inv_panel_x, inv_panel_y, inv_panel_w, inv_panel_h, "ИНВЕНТАРЬ")
-    try:
-        empty_icon = Image.open("icons/empty.png").convert("RGBA").resize((CELL_SIZE - 4, CELL_SIZE - 4))
-    except:
-        empty_icon = None
-    items_list = []
-    for item, count in backpack.items():
-        if count > 0 and (item in ITEM_ICONS or item in ARTIFACT_ICONS):
-            items_list.append((item, count))
-    max_items = INV_COLS * INV_ROWS
-    while len(items_list) < max_items:
-        items_list.append((None, 0))
-    items_list = items_list[:max_items]
-    sort_mode = get_sort_mode(user_id)
-    if sort_mode != 0:
-        active_items = {k: v for k, v in backpack.items() if v > 0}
-        if sort_mode == 1:
-            sorted_items = []
-            for cat in ["еда", "медикаменты", "антирад", "энергетики", "прочее"]:
-                for name in CATEGORIES[cat]:
-                    if name in active_items:
-                        sorted_items.append((name, active_items[name]))
-            for art in ALL_ARTIFACTS:
-                if art in active_items:
-                    sorted_items.append((art, active_items[art]))
-            for name, count in active_items.items():
-                if name not in [n for cat in CATEGORIES.values() for n in cat] and name not in ALL_ARTIFACTS:
-                    sorted_items.append((name, count))
-        elif sort_mode == 2:
-            sorted_items = sorted(active_items.items(), key=lambda x: x[1], reverse=True)
-        new_items_list = []
-        for item, count in sorted_items:
-            new_items_list.append((item, count))
-        while len(new_items_list) < max_items:
-            new_items_list.append((None, 0))
-        items_list = new_items_list[:max_items]
-    for idx, (item, count) in enumerate(items_list):
-        row = idx // INV_COLS
-        col = idx % INV_COLS
-        x = inv_panel_x + 6 + col * CELL_SIZE
-        y = inv_panel_y + 20 + row * CELL_SIZE
-        draw.rectangle([x, y, x + CELL_SIZE - 2, y + CELL_SIZE - 2], fill=COLOR_SLOT_EMPTY, outline=COLOR_FRAME, width=1)
-        if item:
-            icon_path = all_icons.get(item)
-            if icon_path and os.path.exists(icon_path):
-                try:
-                    icon = Image.open(icon_path).convert("RGBA").resize((CELL_SIZE - 6, CELL_SIZE - 6))
-                    img.paste(icon, (x + 2, y + 2), icon)
-                except:
-                    pass
-            text = str(count)
-            text_x = x + CELL_SIZE - 15
-            text_y = y + CELL_SIZE - 18
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                draw.text((text_x + dx, text_y + dy), text, fill=(0, 0, 0), font=font_small)
-            draw.text((text_x, text_y), text, fill=(255, 255, 255), font=font_small)
-        elif empty_icon:
-            img.paste(empty_icon, (x + 2, y + 2), empty_icon)
+    draw.rectangle([scx, GY, scx+12, GY+gh], fill=(30,30,30), outline=BORDER)
+    draw.rectangle([scx+2, GY+2, scx+10, GY+40], fill=(100,100,100))
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
