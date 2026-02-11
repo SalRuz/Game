@@ -21,21 +21,6 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "bot.db"
 AVATAR_DIR = "custom_avatars"
 os.makedirs(AVATAR_DIR, exist_ok=True)
-EQUIPMENT_ICON_DIR = "icons/equipment"
-os.makedirs(EQUIPMENT_ICON_DIR, exist_ok=True)
-EQUIPMENT_ICON_PATHS = {}
-def get_equipment_icon(name):
-    if not name:
-        return None
-    if name in EQUIPMENT_ICON_PATHS:
-        path = EQUIPMENT_ICON_PATHS[name]
-        if os.path.exists(path):
-            return path
-    safe_name = name.replace(" ", "_").replace("«", "").replace("»", "").replace("'", "").replace("ё", "е")
-    path = os.path.join(EQUIPMENT_ICON_DIR, f"{safe_name}.png")
-    if os.path.exists(path):
-        return path
-    return None
 CELL_SIZE = 60
 MARGIN = 5
 COLUMNS = 5
@@ -63,6 +48,13 @@ ARTIFACT_EFFECTS["Пончик"] = {"heal_on_consume": 0.5}
 ARTIFACT_EFFECTS["Стейк"] = {"hunger_on_consume": 0.5}
 DONATION_DURATIONS = {"день": 86400,"неделя": 604800,"месяц": 2592000}
 DONATION_EXCLUDED_ITEMS = ["энергетик нонстоп", "энергетик сталкер", "геркулес"]
+ITEM_WEIGHTS = {"шоколадный батончик": 0.2, "хлеб": 0.4, "колбаса": 0.5, "консерва": 0.6, "бинт": 0.1, "аптечка": 0.3, "армейская аптечка": 0.5, "научная аптечка": 0.6, "сигареты": 0.1, "водка": 0.5, "радиопротектор": 0.2, "антирад": 0.3, "энергетик нонстоп": 0.3, "энергетик сталкер": 0.4, "геркулес": 0.5, "батарейки": 0.1, "желудь": 0.05}
+for art in ALL_ARTIFACTS:
+    ITEM_WEIGHTS[art] = 0.2
+ITEM_WEIGHTS["Пончик"] = 0.15
+ITEM_WEIGHTS["Стейк"] = 0.3
+MAX_CARRY_WEIGHT = 50.0
+QUICK_SLOT_PRIORITY = ["аптечка", "армейская аптечка", "научная аптечка", "бинт", "антирад", "радиопротектор", "водка", "сигареты", "консерва", "колбаса", "хлеб", "шоколадный батончик", "энергетик сталкер", "энергетик нонстоп", "геркулес"]
 players = {}
 factions = {"🛡️ Долг": [], "☦️ Грех": [], "☢️ Одиночки": []}
 MAX_FACTION_SIZES = {"🛡️ Долг": 5, "☦️ Грех": 5, "☢️ Одиночки": 5}
@@ -129,7 +121,7 @@ faction_warehouse_money = {"🛡️ Долг": 0, "☦️ Грех": 0, "☢️ 
 zombie_bot = {"money": 0, "squads": 0, "food_units": 0, "med_units": 0, "rad_units": 0, "last_action_time": 0, "next_action": "", "backpack": {}, "mode": "normal", "priority_target": None, "agro_points": [], "last_attacked_by": None}
 ZOMBIE_ACTION_INTERVAL = 1800
 POINT_STRENGTH = {"База": 5, "Точка ресурсов": 4, "Аномальная зона": 3, "Логово": 2, "Территория": 1}
-ZOMBIE_PHASES = {15: {"name": "Стартовые силы", "territories": 1, "loot_times": 5, "cooldown": 1500}, 30: {"name": "Низкий старт", "territories": 1, "loot_times": 10, "cooldown": 2100}, 45: {"name": "Начальная фаза апокалипсиса", "territories": 2, "loot_times": 10, "cooldown": 2700}, 60: {"name": "Неудержимый марш смерти", "territories": 3, "loot_times": 10, "cooldown": 3300}, 75: {"name": "Хаос воплоти", "territories": 4, "loot_times": 10, "cooldown": 3900}, 100: {"name": "Армагеддон", "territories": 5, "loot_times": 10, "cooldown": 3900}}
+ZOMBIE_PHASES = {15: {"name": "Стартовые силы", "territories": 1, "loot_times": 5}, 30: {"name": "Низкий старт", "territories": 1, "loot_times": 10}, 45: {"name": "Начальная фаза апокалипсиса", "territories": 2, "loot_times": 10}, 60: {"name": "Неудержимый марш смерти", "territories": 3, "loot_times": 10}, 75: {"name": "Хаос воплоти", "territories": 4, "loot_times": 10}, 100: {"name": "Армагеддон", "territories": 5, "loot_times": 10}}
 FACTION_START_LOCATIONS = {"🛡️ Долг": ("Кордон", "Б1"),"☦️ Грех": ("Тёмная долина", "Б1"),"☢️ Одиночки": ("Свалка", "Б1")}
 FACTION_CHAT_LINKS = {"🛡️ Долг": "https://vk.me/join//eWcWfZ3Kcr3PZtkGLF91BIxJq4GnZ4aeB8=", "☦️ Грех": "https://vk.me/join/gO2fqOqDnL756hWkhjvMm9P2ypNTz7/r2vw=", "☢️ Одиночки": "https://vk.me/join/ynzBEUOPUmsKVaB0K0BhSFnzGZsNJlrFGNY="}
 POINT_TYPES = {"Б1": "База", "Б2": "База", "Б3": "База", "Б4": "База", "Т1": "Территория", "Т2": "Территория", "Т3": "Территория", "Т4": "Территория", "Т5": "Территория", "ТР1": "Точка ресурсов", "ТР2": "Точка ресурсов", "ТР3": "Точка ресурсов", "А1": "Аномальная зона", "А2": "Аномальная зона", "А3": "Аномальная зона", "Л1": "Логово", "Л2": "Логово", "Л3": "Логово", "Л4": "Логово", "Л5": "Логово"}
@@ -2286,14 +2278,12 @@ def get_zombie_status():
     controlled = get_zombie_controlled_locations()
     strength = get_zombie_strength()
     phase = get_zombie_phase()
-    cooldown = get_zombie_cooldown()
-    next_action_time = zombie_bot.get("last_action_time", 0) + cooldown
+    next_action_time = zombie_bot.get("last_action_time", 0) + ZOMBIE_ACTION_INTERVAL
     remaining = max(0, next_action_time - time.time())
     mins = int(remaining // 60)
     secs = int(remaining % 60)
     lines = ["🧟 === СТАТУС ЗОМБИРОВАННЫХ ===", ""]
     lines.append(f"💪 Сила: {strength} | Фаза: {phase['name']}")
-    lines.append(f"⏱️ КД фазы: {cooldown // 60} мин")
     lines.append(f"💲 Деньги: {zombie_bot['money']}р")
     lines.append(f"👨‍👨‍👦‍👦 Сквады: {zombie_bot['squads']} (бонус: {zombie_bot.get('bonus_squads', 0)})")
     lines.append(f"🍖 Еда: {zombie_bot['food_units']}")
@@ -2358,9 +2348,6 @@ def get_zombie_phase():
     if current_phase is None:
         current_phase = ZOMBIE_PHASES[15]
     return current_phase
-def get_zombie_cooldown():
-    phase = get_zombie_phase()
-    return phase.get("cooldown", 1800)
 def find_nearest_faction_territory(user_id):
     p = players[user_id]
     faction = p.get("faction")
@@ -4288,263 +4275,262 @@ def handle_global_commands(user_id, text, vk_session, reply_user_id=None):
             send_message(target_uid, "⚔️ Вы экипированы как Рыцарь Долга!\n\n🔫 Гром С14\n🦺 Экзоскелет «Долга»\n📟 Сварог\n👨‍👨‍👦‍👦 +500 сквадов", None, vk_session)
         return True
     return False
+def _get_quick_slot_items(backpack):
+    """Первые 4 consumable-предмета для слотов F1-F4 (как в S.T.A.L.K.E.R.)"""
+    result = []
+    for item in QUICK_SLOT_PRIORITY:
+        cnt = backpack.get(item, 0)
+        if cnt > 0 and (item in ITEM_ICONS or item in ARTIFACT_ICONS):
+            result.append((item, cnt))
+            if len(result) >= 4:
+                break
+    return result
+
+def _calc_total_weight(backpack, belt):
+    """Расчёт общего веса инвентаря в кг."""
+    total = 0.0
+    for item, count in backpack.items():
+        if count > 0:
+            w = ITEM_WEIGHTS.get(item, 0.2)
+            total += w * count
+    for art in (belt or []):
+        if art:
+            total += ITEM_WEIGHTS.get(art, 0.2)
+    return round(total, 1)
+
 def generate_inventory_image(user_id):
+    """Генерация инвентаря в стиле S.T.A.L.K.E.R. (образец из закреплённого фото)."""
     p = players[user_id]
     backpack = p.get("backpack", {})
-    W, H = 900, 560
-    BG_CLR = (20, 22, 24)
-    SLOT_BG = (35, 40, 38, 200)
-    BORDER = (70, 80, 65)
-    BORDER_L = (110, 120, 100)
-    TEXT_CLR = (170, 180, 170)
-    TEXT_B = (220, 225, 220)
-    MONEY_CLR = (230, 180, 50)
-    GRID_CLR = (50, 55, 50)
-    BAR_BG = (20, 22, 20)
-    LABEL_CLR = (200, 200, 100)
-    EMPTY_CLR = (100, 100, 100)
+    belt = p.get("belt", [None, None, None])
+    weapon = p.get("weapon")
+    armor = p.get("armor")
+    detector = p.get("detector")
+    weapon_durability = p.get("weapon_durability", 0)
+    weapon_max = p.get("weapon_max_durability", 1)
+    armor_durability = p.get("armor_durability", 0)
+    armor_max = p.get("armor_max_durability", 1)
+    detector_charge = p.get("detector_charge", 0)
+    detector_max = p.get("detector_max_charge", 1)
+    CELL_SIZE = 48
+    INV_COLS = 7
+    INV_ROWS = 9
+    LEFT_PANEL_WIDTH = 290
+    SLOT_SIZE = 44
+    QUICK_SLOT_SIZE = 42
+    inv_grid_w = INV_COLS * CELL_SIZE + 20
+    inv_grid_h = INV_ROWS * CELL_SIZE + 30
+    width = LEFT_PANEL_WIDTH + inv_grid_w + 10
+    height = max(580, inv_grid_h + 50)
     try:
-        font = ImageFont.truetype("Graffiti1C.ttf", 15)
-        font_s = ImageFont.truetype("Graffiti1C.ttf", 12)
-        font_t = ImageFont.truetype("Graffiti1C.ttf", 18)
-        font_m = ImageFont.truetype("Graffiti1C.ttf", 20)
+        bg = Image.open("backgrounds/inventory_bg.png").convert("RGBA").resize((width, height))
     except:
-        try:
-            font = ImageFont.truetype("arial.ttf", 15)
-            font_s = ImageFont.truetype("arial.ttf", 12)
-            font_t = ImageFont.truetype("arial.ttf", 18)
-            font_m = ImageFont.truetype("arial.ttf", 20)
-        except:
-            font = ImageFont.load_default()
-            font_s = font
-            font_t = font
-            font_m = font
-    try:
-        bg = Image.open("backgrounds/inventory_bg.png").convert("RGBA").resize((W, H))
-    except:
-        bg = Image.new("RGBA", (W, H), BG_CLR)
+        bg = Image.new("RGBA", (width, height), (35, 38, 42, 255))
     img = bg.copy()
     draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype("Graffiti1C.ttf", 14)
+        font_small = ImageFont.truetype("Graffiti1C.ttf", 11)
+        font_title = ImageFont.truetype("Graffiti1C.ttf", 16)
+    except:
+        try:
+            font = ImageFont.truetype("arial.ttf", 14)
+            font_small = ImageFont.truetype("arial.ttf", 11)
+            font_title = ImageFont.truetype("arial.ttf", 16)
+        except:
+            font = ImageFont.load_default()
+            font_small = font
+            font_title = font
+    DARK = (28, 30, 32, 255)
+    SLOT_BG = (45, 48, 52, 255)
+    SLOT_BORDER = (65, 70, 75, 255)
+    BORDER_LIGHT = (85, 90, 95, 255)
+    TEXT_WHITE = (220, 220, 220, 255)
+    BAR_RED = (180, 50, 50, 255)
+    BAR_GREEN = (50, 140, 60, 255)
+    BAR_ORANGE = (200, 120, 40, 255)
+    BAR_BLUE = (60, 120, 180, 255)
     all_icons = {**ITEM_ICONS, **ARTIFACT_ICONS}
-    def dto(x, y, t, f, c=TEXT_CLR):
-        for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
-            draw.text((x+dx, y+dy), t, fill=(0,0,0), font=f)
-        draw.text((x, y), t, fill=c, font=f)
-    def draw_frame(x, y, w, h, title=None):
-        draw.rectangle([x, y, x+w, y+h], fill=(28, 32, 28, 200), outline=BORDER, width=2)
-        L = 8
-        for cx, cy in [(x,y),(x+w,y),(x,y+h),(x+w,y+h)]:
-            hx = cx - L if cx == x + w else cx
-            hx2 = cx + L if cx == x else cx
-            draw.line([(hx, cy), (hx2, cy)], fill=BORDER_L, width=2)
-            vy = cy - L if cy == y + h else cy
-            vy2 = cy + L if cy == y else cy
-            draw.line([(cx, vy), (cx, vy2)], fill=BORDER_L, width=2)
-        if title:
-            dto(x + 5, y + 3, title, font_s, LABEL_CLR)
-    def draw_bar(x, y, w, h, val, mx, color, label):
-        draw.rectangle([x, y, x+w, y+h], fill=BAR_BG, outline=BORDER, width=1)
-        if mx > 0:
-            fw = int((val / mx) * (w - 4))
-            if fw > 0:
-                draw.rectangle([x+2, y+2, x+2+fw, y+h-2], fill=color)
-            for i in range(1, 10):
-                tx = x + 2 + int(i * (w - 4) / 10)
-                draw.line([(tx, y+2), (tx, y+h-2)], fill=(0,0,0), width=1)
-        dto(x + w + 5, y - 1, label, font_s)
-    def paste_equip_icon(icon_path, sx, sy, sw, max_h):
-        try:
-            eqi = Image.open(icon_path).convert("RGBA")
-            eqi.thumbnail((sw - 16, max_h))
-            epx = sx + (sw - eqi.width) // 2
-            epy = sy + 18 + (max_h - eqi.height) // 2
-            img.paste(eqi, (epx, epy), eqi)
-            return True
-        except:
-            return False
-    av_s = 72
-    ax, ay = 15, 12
-    draw.rectangle([ax-2, ay-2, ax+av_s+2, ay+av_s+2], outline=BORDER, width=2)
-    av_p = os.path.join(AVATAR_DIR, f"{user_id}.png")
-    if os.path.exists(av_p):
-        try:
-            av = Image.open(av_p).convert("RGBA").resize((av_s, av_s))
-            img.paste(av, (ax, ay), av)
-        except:
-            draw.rectangle([ax, ay, ax+av_s, ay+av_s], fill=SLOT_BG)
-    else:
-        draw.rectangle([ax, ay, ax+av_s, ay+av_s], fill=SLOT_BG)
-    ix = ax + av_s + 10
-    dto(ix, ay, p.get("nickname", "Stalker"), font_t, TEXT_B)
+
+    def draw_text_outline(x, y, text, fnt, fill=TEXT_WHITE):
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            draw.text((x + dx, y + dy), text, fill=(0, 0, 0), font=fnt)
+        draw.text((x, y), text, fill=fill, font=fnt)
+
+    def draw_slot(x, y, size, has_item=False):
+        draw.rectangle([x, y, x + size, y + size], fill=SLOT_BG, outline=SLOT_BORDER, width=2)
+        draw.rectangle([x + 1, y + 1, x + size - 1, y + size - 1], outline=BORDER_LIGHT, width=1)
+
+    def draw_durability_bar(x, y, w, h, val, max_val, color=BAR_GREEN):
+        draw.rectangle([x, y, x + w, y + h], fill=DARK, outline=SLOT_BORDER, width=1)
+        if max_val > 0 and val > 0:
+            fill_w = int((val / max_val) * (w - 4))
+            if fill_w > 0:
+                draw.rectangle([x + 2, y + 2, x + 2 + fill_w, y + h - 2], fill=color)
+
+    def draw_resistance_bar(x, y, w, h, val, max_val=2, color=BAR_RED):
+        draw.rectangle([x, y, x + w, y + h], fill=DARK, outline=SLOT_BORDER, width=1)
+        if max_val > 0 and val > 0:
+            v = min(val, max_val)
+            fill_w = int((v / max_val) * (w - 4))
+            if fill_w > 0:
+                draw.rectangle([x + 2, y + 2, x + 2 + fill_w, y + h - 2], fill=color)
+
+    px, py = 8, 8
+    avatar_size = 52
+    header_h = 60
+    draw.rectangle([px, py, px + LEFT_PANEL_WIDTH - 16, py + header_h], fill=DARK, outline=SLOT_BORDER, width=1)
+    draw_text_outline(px + 5, py + 4, p["nickname"][:18], font_title)
     faction = p.get("faction", "")
-    fi_p = FACTION_ICONS.get(faction)
-    if fi_p and os.path.exists(fi_p):
+    faction_clean = faction.replace("🛡️ ", "").replace("☦️ ", "").replace("☢️ ", "")
+    draw_text_outline(px + 5, py + 24, faction_clean[:14], font_small)
+    draw_text_outline(px + 5, py + 40, f"{p.get('money', 0)} RU", font)
+    avatar_x = px + LEFT_PANEL_WIDTH - 16 - avatar_size - 4
+    avatar_y = py + 4
+    draw_slot(avatar_x, avatar_y, avatar_size)
+    avatar_path = os.path.join(AVATAR_DIR, f"{user_id}.png")
+    if os.path.exists(avatar_path):
         try:
-            fi = Image.open(fi_p).convert("RGBA").resize((16, 16))
-            img.paste(fi, (ix, ay + 24), fi)
+            avatar = Image.open(avatar_path).convert("RGBA").resize((avatar_size - 4, avatar_size - 4))
+            img.paste(avatar, (avatar_x + 2, avatar_y + 2), avatar)
         except:
             pass
-    fc = faction.replace("🛡️ ", "").replace("☦️ ", "").replace("☢️ ", "")
-    dto(ix + 20, ay + 24, fc, font)
-    loc = p.get("location", "Лагерь")
-    pt = p.get("point", "Б1")
-    dto(ix, ay + 44, f"{loc} {pt}", font)
-    money = p.get("money", 0)
-    draw.rectangle([ix, ay+64, ix+140, ay+88], outline=MONEY_CLR, width=2)
-    dto(ix + 5, ay + 67, f"$ {money} RU", font_m, MONEY_CLR)
-    eq_y = 115
-    sw, sh = 105, 125
-    sg = 5
-    wname = p.get("weapon")
-    draw_frame(10, eq_y, sw, sh, "ОРУЖИЕ")
-    if wname:
-        icon_p = get_equipment_icon(wname)
-        has_icon = False
-        if icon_p:
-            has_icon = paste_equip_icon(icon_p, 10, eq_y, sw, 55)
-        ty = eq_y + 78 if has_icon else eq_y + 20
-        dto(15, ty, wname[:13], font_s, TEXT_B)
-        wd = p.get("weapon_durability", 0)
-        wmd = p.get("weapon_max_durability", 0)
-        dto(15, ty + 14, f"🔧{wd}/{wmd}", font_s)
-        wdmg = round(p.get("weapon_damage", 0) + get_belt_bonus(user_id, "weapon_damage"), 1)
-        wacc = int(p.get("weapon_accuracy", 0) + get_belt_bonus(user_id, "weapon_accuracy"))
-        dto(15, ty + 28, f"💢{wdmg} 🎯{wacc}", font_s)
+    equip_y = header_h + 15
+    center_x = px + (LEFT_PANEL_WIDTH - 16) // 2 - SLOT_SIZE // 2
+    pistol_slot_x = center_x - SLOT_SIZE - 10
+    armor_slot_x = center_x
+    rifle_slot_x = center_x + SLOT_SIZE + 10
+    draw_text_outline(px + 5, equip_y - 14, "СНАРЯЖЕНИЕ", font_small)
+    draw_slot(center_x, equip_y, SLOT_SIZE, bool(detector))
+    if detector:
+        draw_text_outline(center_x + 2, equip_y + 12, detector[:10], font_small)
+        draw_durability_bar(center_x, equip_y + SLOT_SIZE + 2, SLOT_SIZE, 6, detector_charge, detector_max)
     else:
-        dto(30, eq_y + 55, "пусто", font_s, EMPTY_CLR)
-    aname = p.get("armor")
-    asx = 10 + sw + sg
-    draw_frame(asx, eq_y, sw, sh, "БРОНЯ")
-    if aname:
-        icon_p = get_equipment_icon(aname)
-        has_icon = False
-        if icon_p:
-            has_icon = paste_equip_icon(icon_p, asx, eq_y, sw, 55)
-        ty = eq_y + 78 if has_icon else eq_y + 20
-        dto(asx + 5, ty, aname[:13], font_s, TEXT_B)
-        ad = p.get("armor_durability", 0)
-        amd = p.get("armor_max_durability", 0)
-        dto(asx + 5, ty + 14, f"🔧{ad}/{amd}", font_s)
-        br = round(p.get("bullet_resist", 0) + get_belt_bonus(user_id, "bullet_resist"), 1)
-        bl = round(p.get("blast_resist", 0) + get_belt_bonus(user_id, "blast_resist"), 1)
-        an = round(p.get("anomaly_resist", 0) + get_belt_bonus(user_id, "anomaly_resist"), 1)
-        dto(asx + 5, ty + 28, f"🛡{br}🐾{bl}💥{an}", font_s)
+        draw_durability_bar(center_x, equip_y + SLOT_SIZE + 2, SLOT_SIZE, 6, 0, 1)
+    draw_slot(armor_slot_x, equip_y + SLOT_SIZE + 14, SLOT_SIZE, bool(armor))
+    if armor:
+        draw_text_outline(armor_slot_x + 2, equip_y + SLOT_SIZE + 22, armor[:10], font_small)
+        draw_durability_bar(armor_slot_x, equip_y + SLOT_SIZE * 2 + 18, SLOT_SIZE, 6, armor_durability, armor_max)
     else:
-        dto(asx + 20, eq_y + 55, "пусто", font_s, EMPTY_CLR)
-    dname = p.get("detector")
-    dsx = 10 + 2 * (sw + sg)
-    draw_frame(dsx, eq_y, sw, sh, "ДЕТЕКТОР")
-    if dname:
-        icon_p = get_equipment_icon(dname)
-        has_icon = False
-        if icon_p:
-            has_icon = paste_equip_icon(icon_p, dsx, eq_y, sw, 55)
-        ty = eq_y + 78 if has_icon else eq_y + 35
-        dto(dsx + 5, ty, dname, font_s, TEXT_B)
-        dc = p.get("detector_charge", 0)
-        dmc = p.get("detector_max_charge", 0)
-        dto(dsx + 5, ty + 16, f"🔋{dc}/{dmc}", font_s)
+        draw_durability_bar(armor_slot_x, equip_y + SLOT_SIZE * 2 + 18, SLOT_SIZE, 6, 0, 1)
+    draw_slot(pistol_slot_x, equip_y + SLOT_SIZE + 14, SLOT_SIZE, bool(detector))
+    if detector:
+        draw_text_outline(pistol_slot_x + 2, equip_y + SLOT_SIZE + 22, "📟", font_small)
+    draw_slot(rifle_slot_x, equip_y + SLOT_SIZE + 14, SLOT_SIZE, bool(weapon))
+    if weapon:
+        draw_text_outline(rifle_slot_x + 2, equip_y + SLOT_SIZE + 22, weapon[:10], font_small)
+        draw_durability_bar(rifle_slot_x, equip_y + SLOT_SIZE * 2 + 18, SLOT_SIZE, 6, weapon_durability, weapon_max)
     else:
-        dto(dsx + 20, eq_y + 55, "пусто", font_s, EMPTY_CLR)
-    bly = eq_y + sh + 15
-    dto(10, bly, "ПОЯС АРТЕФАКТОВ", font_s, LABEL_CLR)
-    bly += 18
-    belt = p.get("belt", [None, None, None])
-    bc = 52
-    bgap = 8
-    for i in range(3):
-        bxx = 10 + i * (bc + bgap)
-        draw.rectangle([bxx, bly, bxx+bc, bly+bc], fill=SLOT_BG, outline=BORDER, width=2)
-        dto(bxx + 3, bly + 2, str(i + 1), font_s, (150, 150, 100))
-        if belt[i]:
-            ip = all_icons.get(belt[i])
-            if ip and os.path.exists(ip):
+        draw_durability_bar(rifle_slot_x, equip_y + SLOT_SIZE * 2 + 18, SLOT_SIZE, 6, 0, 1)
+    artifact_slot_x = center_x
+    draw_slot(artifact_slot_x, equip_y + SLOT_SIZE * 2 + 34, SLOT_SIZE, bool(belt and belt[0]))
+    if belt and belt[0]:
+        icon_path = all_icons.get(belt[0])
+        if icon_path and os.path.exists(icon_path):
+            try:
+                icon = Image.open(icon_path).convert("RGBA").resize((SLOT_SIZE - 8, SLOT_SIZE - 8))
+                img.paste(icon, (artifact_slot_x + 4, equip_y + SLOT_SIZE * 2 + 38), icon)
+            except:
+                pass
+        draw_durability_bar(artifact_slot_x, equip_y + SLOT_SIZE * 3 + 42, SLOT_SIZE, 6, 5, 5)
+    else:
+        draw_durability_bar(artifact_slot_x, equip_y + SLOT_SIZE * 3 + 42, SLOT_SIZE, 6, 0, 1)
+    quick_y = equip_y + SLOT_SIZE * 3 + 70
+    draw_text_outline(px + 5, quick_y - 14, "БЫСТРЫЕ СЛОТЫ", font_small)
+    quick_items = _get_quick_slot_items(backpack)
+    for i in range(4):
+        qx = px + 5 + i * (QUICK_SLOT_SIZE + 6)
+        draw_slot(qx, quick_y, QUICK_SLOT_SIZE)
+        draw_text_outline(qx + 2, quick_y + QUICK_SLOT_SIZE - 14, f"F{i+1}", font_small)
+        if i < len(quick_items):
+            item, cnt = quick_items[i]
+            icon_path = all_icons.get(item)
+            if icon_path and os.path.exists(icon_path):
                 try:
-                    bi = Image.open(ip).convert("RGBA").resize((bc-8, bc-8))
-                    img.paste(bi, (bxx+4, bly+4), bi)
+                    icon = Image.open(icon_path).convert("RGBA").resize((QUICK_SLOT_SIZE - 8, QUICK_SLOT_SIZE - 8))
+                    img.paste(icon, (qx + 4, quick_y + 4), icon)
                 except:
                     pass
-    sty = bly + bc + 20
-    bx_b = 10
-    bw_b = 220
-    bh_b = 14
-    bsp = 26
-    hp = p.get("health", 10)
-    rad = p.get("radiation", 0)
-    hun = p.get("hunger", 0)
-    sta = p.get("stamina", 10)
-    dto(bx_b, sty, "ХАРАКТЕРИСТИКИ", font_s, LABEL_CLR)
-    sty += 18
-    draw_bar(bx_b, sty, bw_b, bh_b, hp, 10, (180, 50, 50), f"❤️{hp}/10")
-    draw_bar(bx_b, sty + bsp, bw_b, bh_b, rad, 10, (50, 180, 50), f"☢️{rad}/10")
-    draw_bar(bx_b, sty + bsp*2, bw_b, bh_b, hun, 10, (200, 170, 60), f"🍽️{hun}/10")
-    draw_bar(bx_b, sty + bsp*3, bw_b, bh_b, sta, 10, (70, 150, 200), f"⚡{sta}/10")
-    CELL = 50
-    COLS = 10
-    ROWS = 10
-    GX = 370
-    GY = 10
-    dto(GX, GY, "ИНВЕНТАРЬ", font_s, LABEL_CLR)
-    GY += 20
-    gw = COLS * CELL
-    gh = ROWS * CELL
-    draw.rectangle([GX-2, GY-2, GX+gw+2, GY+gh+2], outline=BORDER, width=2)
+            draw_text_outline(qx + QUICK_SLOT_SIZE - 18, quick_y + 2, f"x{cnt}", font_small)
+    belt_y = quick_y + QUICK_SLOT_SIZE + 12
+    draw_text_outline(px + 5, belt_y - 14, "ПОЯС АРТЕФАКТОВ", font_small)
+    for i in range(4):
+        bx = px + 5 + i * (QUICK_SLOT_SIZE + 6)
+        draw_slot(bx, belt_y, QUICK_SLOT_SIZE)
+        if i < 3 and belt and belt[i]:
+            icon_path = all_icons.get(belt[i])
+            if icon_path and os.path.exists(icon_path):
+                try:
+                    icon = Image.open(icon_path).convert("RGBA").resize((QUICK_SLOT_SIZE - 8, QUICK_SLOT_SIZE - 8))
+                    img.paste(icon, (bx + 4, belt_y + 4), icon)
+                except:
+                    pass
+    stats_y = belt_y + QUICK_SLOT_SIZE + 14
+    bar_w, bar_h = 90, 10
+    draw_text_outline(px + 5, stats_y - 12, "ХАРАКТЕРИСТИКИ", font_small)
+    draw_resistance_bar(px + 5, stats_y, bar_w, bar_h, p.get("health", 10), 10, BAR_RED)
+    draw_text_outline(px + bar_w + 10, stats_y + 1, f"{p.get('health', 10)}/10", font_small)
+    draw_resistance_bar(px + 5, stats_y + 16, bar_w, bar_h, p.get("radiation", 0), 10)
+    draw_text_outline(px + bar_w + 10, stats_y + 17, f"{p.get('radiation', 0)}/10", font_small)
+    draw_resistance_bar(px + 5, stats_y + 32, bar_w, bar_h, p.get("hunger", 0), 10)
+    draw_text_outline(px + bar_w + 10, stats_y + 33, f"{p.get('hunger', 0)}/10", font_small)
+    draw_resistance_bar(px + 5, stats_y + 48, bar_w, bar_h, p.get("stamina", 10), 10, BAR_BLUE)
+    draw_text_outline(px + bar_w + 10, stats_y + 49, f"{p.get('stamina', 10)}/10", font_small)
+    draw.rectangle([px + 5, height - 38, px + LEFT_PANEL_WIDTH - 21, height - 12], fill=DARK, outline=SLOT_BORDER, width=1)
+    draw_text_outline(px + 12, height - 32, "Назад", font)
+    inv_x = LEFT_PANEL_WIDTH + 5
+    inv_y = 8
+    draw.rectangle([inv_x, inv_y, inv_x + inv_grid_w, inv_y + inv_grid_h], fill=DARK, outline=SLOT_BORDER, width=2)
+    draw_text_outline(inv_x + 6, inv_y + 4, "ИНВЕНТАРЬ", font_small)
+    items_list = []
+    for item, count in backpack.items():
+        if count > 0 and (item in ITEM_ICONS or item in ARTIFACT_ICONS):
+            items_list.append((item, count))
+    max_items = INV_COLS * INV_ROWS
+    sort_mode = get_sort_mode(user_id)
+    if sort_mode != 0:
+        active_items = {k: v for k, v in backpack.items() if v > 0}
+        if sort_mode == 1:
+            sorted_items = []
+            for cat in ["еда", "медикаменты", "антирад", "энергетики", "прочее"]:
+                for name in CATEGORIES.get(cat, []):
+                    if name in active_items:
+                        sorted_items.append((name, active_items[name]))
+            for art in ALL_ARTIFACTS:
+                if art in active_items:
+                    sorted_items.append((art, active_items[art]))
+            flat_cats = [n for c in CATEGORIES.values() for n in (c if isinstance(c, list) else [])]
+            for name, count in active_items.items():
+                if name not in flat_cats and name not in ALL_ARTIFACTS:
+                    sorted_items.append((name, count))
+            items_list = sorted_items
+        elif sort_mode == 2:
+            items_list = sorted(active_items.items(), key=lambda x: x[1], reverse=True)
+    while len(items_list) < max_items:
+        items_list.append((None, 0))
+    items_list = items_list[:max_items]
     try:
-        empty_ic = Image.open("icons/empty.png").convert("RGBA").resize((CELL-4, CELL-4))
+        empty_icon = Image.open("icons/empty.png").convert("RGBA").resize((CELL_SIZE - 4, CELL_SIZE - 4))
     except:
-        empty_ic = None
-    il = []
-    ai = {k: v for k, v in backpack.items() if v > 0}
-    sm = get_sort_mode(user_id)
-    if sm == 1:
-        for cat in ["еда", "медикаменты", "антирад", "энергетики", "прочее"]:
-            for nm in CATEGORIES[cat]:
-                if nm in ai:
-                    il.append((nm, ai[nm]))
-        for art in ALL_ARTIFACTS:
-            if art in ai:
-                il.append((art, ai[art]))
-        added = set()
-        for ci in CATEGORIES.values():
-            added.update(ci)
-        added.update(ALL_ARTIFACTS)
-        for nm, cnt in ai.items():
-            if nm not in added:
-                il.append((nm, cnt))
-    elif sm == 2:
-        il = sorted(ai.items(), key=lambda x: x[1], reverse=True)
-    else:
-        for item, cnt in backpack.items():
-            if cnt > 0:
-                il.append((item, cnt))
-    mx = COLS * ROWS
-    while len(il) < mx:
-        il.append((None, 0))
-    il = il[:mx]
-    for idx, (item, count) in enumerate(il):
-        r = idx // COLS
-        c = idx % COLS
-        x = GX + c * CELL
-        y = GY + r * CELL
-        draw.rectangle([x, y, x+CELL-1, y+CELL-1], fill=SLOT_BG, outline=GRID_CLR, width=1)
+        empty_icon = None
+    for idx, (item, count) in enumerate(items_list):
+        row, col = idx // INV_COLS, idx % INV_COLS
+        x = inv_x + 8 + col * CELL_SIZE
+        y = inv_y + 22 + row * CELL_SIZE
+        draw.rectangle([x, y, x + CELL_SIZE - 2, y + CELL_SIZE - 2], fill=SLOT_BG, outline=SLOT_BORDER, width=1)
         if item:
-            ip = all_icons.get(item)
-            if ip and os.path.exists(ip):
+            icon_path = all_icons.get(item)
+            if icon_path and os.path.exists(icon_path):
                 try:
-                    ic = Image.open(ip).convert("RGBA").resize((CELL-6, CELL-6))
-                    img.paste(ic, (x+3, y+3), ic)
+                    icon = Image.open(icon_path).convert("RGBA").resize((CELL_SIZE - 6, CELL_SIZE - 6))
+                    img.paste(icon, (x + 2, y + 2), icon)
                 except:
                     pass
-            if count > 1:
-                ct = str(count)
-                for ddx, ddy in [(-1,0),(1,0),(0,-1),(0,1)]:
-                    draw.text((x+CELL-18+ddx, y+CELL-16+ddy), ct, fill=(0,0,0), font=font_s)
-                draw.text((x+CELL-18, y+CELL-16), ct, fill=(255,255,255), font=font_s)
-        elif empty_ic:
-            img.paste(empty_ic, (x+2, y+2), empty_ic)
-    scx = GX + gw + 5
-    draw.rectangle([scx, GY, scx+12, GY+gh], fill=(30,30,30), outline=BORDER)
-    draw.rectangle([scx+2, GY+2, scx+10, GY+40], fill=(100,100,100))
+            draw_text_outline(x + CELL_SIZE - 20, y + CELL_SIZE - 18, str(count), font_small)
+        elif empty_icon:
+            img.paste(empty_icon, (x + 2, y + 2), empty_icon)
+    total_weight = _calc_total_weight(backpack, belt)
+    draw_text_outline(inv_x + 6, inv_y + inv_grid_h - 22, f"Вес: {total_weight} кг / {MAX_CARRY_WEIGHT} кг", font_small)
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
@@ -7573,7 +7559,7 @@ def background_checker(vk_session):
                             save_data()
                             send_message(user_id, "😴 Вы отдохнули и полностью восстановили выносливость.", create_camp_menu_keyboard(), vk_session)
             if LAST_STAND_MODE:
-                next_action_time = zombie_bot.get("last_action_time", 0) + get_zombie_cooldown()
+                next_action_time = zombie_bot.get("last_action_time", 0) + ZOMBIE_ACTION_INTERVAL
                 if current_time >= next_action_time:
                     zombie_take_action(vk_session)
             time.sleep(10)
